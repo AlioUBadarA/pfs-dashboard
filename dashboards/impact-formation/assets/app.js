@@ -29,8 +29,11 @@
     title: document.getElementById('title'),
     subtitle: document.getElementById('subtitle')
   };
+  var I18N = window.PFS_I18N;
+  var tr = I18N.tr, tx = I18N.t;
   var charts = [];
   var requestId = 0;
+  var lastData = null;
 
   /* ---------------- Helpers ---------------- */
 
@@ -69,7 +72,7 @@
   function fillSelect(select, options, current) {
     select.textContent = '';
     options.forEach(function (o) {
-      var opt = make('option', null, o);
+      var opt = make('option', null, tr(o));
       opt.value = o;
       if (o === current) opt.selected = true;
       select.appendChild(opt);
@@ -86,6 +89,7 @@
     if (/[?&]demo=1/.test(location.search)) q.set('demo', '1');
     if (country !== ALL_COUNTRIES) q.set('country', country);
     if (format !== ALL_FORMATS) q.set('format', format);
+    if (I18N.lang === 'fr') q.set('lang', 'fr');
     var s = q.toString();
     history.replaceState(null, '', location.pathname + (s ? '?' + s : ''));
   }
@@ -104,7 +108,7 @@
     var key = 'pfs|' + country + '|' + format;
     var cached = cacheGet(key);
     if (cached) { render(cached); }
-    else { setState('Loading the latest figures…'); el.content.style.opacity = '0.4'; }
+    else { setState(tx('Loading the latest figures…', 'Chargement des derniers chiffres…')); el.content.style.opacity = '0.4'; }
     el.country.disabled = true; el.format.disabled = true;
 
     var url;
@@ -112,7 +116,7 @@
       url = 'demo.json';
     } else {
       if (!cfg.API_URL || cfg.API_URL.indexOf('http') !== 0) {
-        setState('The data address is not set yet: paste the Apps Script web app URL in assets/config.js.', true);
+        setState(tx('The data address is not set yet: paste the Apps Script web app URL in assets/config.js.', 'L\'adresse des données n\'est pas encore définie : collez l\'URL de l\'application web Apps Script dans assets/config.js.'), true);
         return;
       }
       url = cfg.API_URL + (cfg.API_URL.indexOf('?') > -1 ? '&' : '?') +
@@ -131,7 +135,7 @@
       })
       .catch(function (err) {
         if (id !== requestId) return;
-        if (!cached) setState('The figures could not be loaded (' + err.message + '). Please refresh the page in a minute.', true);
+        if (!cached) setState(tx('The figures could not be loaded (' + err.message + '). Please refresh the page in a minute.', 'Les chiffres n\'ont pas pu être chargés (' + err.message + '). Rechargez la page dans une minute.'), true);
       })
       .then(function () {
         if (id !== requestId) return;
@@ -143,19 +147,20 @@
   /* ---------------- Rendering ---------------- */
 
   function render(d) {
+    lastData = d;
     var f = d.filter || {};
-    if (d.title) { el.title.textContent = d.title; document.title = d.title; }
-    if (d.subtitle) el.subtitle.textContent = d.subtitle;
+    if (d.title) { el.title.textContent = tr(d.title); document.title = tr(d.title); }
+    if (d.subtitle) el.subtitle.textContent = tr(d.subtitle);
     fillSelect(el.country, f.options || [ALL_COUNTRIES], f.choix);
     fillSelect(el.format, f.optionsFormat || [ALL_FORMATS], f.format);
-    el.scope.textContent = f.perimetre || '';
-    el.updated.textContent = d.updated ? 'Computed on ' + new Date(d.updated).toLocaleString('en-GB',
+    el.scope.textContent = tr(f.perimetre || '');
+    el.updated.textContent = d.updated ? tx('Computed on ', 'Calculé le ') + new Date(d.updated).toLocaleString(tx('en-GB', 'fr-FR'),
       { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
     renderKpis(d.kpis || []);
     if (d.guide) {
-      el.guide.textContent = d.guide.replace(/^HOW TO READ\s+/, '').replace(/\s{3,}/g, '  ·  ');
-      el.guide.insertBefore(make('strong', null, 'How to read  '), el.guide.firstChild);
+      el.guide.textContent = d.guide.replace(/^HOW TO READ\s+/, '').split(/\s{3,}/).map(tr).join('  ·  ');
+      el.guide.insertBefore(make('strong', null, tx('How to read  ', 'Comment lire  ')), el.guide.firstChild);
       el.guide.hidden = false;
     }
     renderBlocks(d.blocks || []);
@@ -166,9 +171,9 @@
     kpis.forEach(function (k) {
       var card = make('article', 'kpi');
       card.style.borderTopColor = k.accent || '';
-      card.appendChild(make('h2', null, k.titre));
+      card.appendChild(make('h2', null, tr(k.titre)));
       card.appendChild(make('p', 'value', String(k.valeur || '').trim()));
-      var det = make('p', 'detail', String(k.detail || '').trim());
+      var det = make('p', 'detail', tr(String(k.detail || '').trim()));
       if (k.couleurDetail && k.couleurDetail !== INK_SOFT) det.style.color = k.couleurDetail;
       card.appendChild(det);
       el.kpis.appendChild(card);
@@ -184,9 +189,9 @@
       if (b.type === 'section') {
         section = make('section', 'section' + (b.vedette ? ' featured' : ''));
         var head = make('div', 'section-head');
-        head.appendChild(make('h2', null, b.titre));
+        head.appendChild(make('h2', null, tr(b.titre)));
         section.appendChild(head);
-        if (b.intro) section.appendChild(make('p', 'intro', b.intro));
+        if (b.intro) section.appendChild(make('p', 'intro', tr(b.intro)));
         el.content.appendChild(section);
       } else if (b.type === 'tableau') {
         (section || el.content).appendChild(renderTable(b));
@@ -208,34 +213,35 @@
   function renderTable(t) {
     var block = make('div', 'block' + (t.graphique ? ' with-chart' : ''));
     var left = make('div');
-    if (t.soustitre) left.appendChild(make('h3', null, t.soustitre));
+    if (t.soustitre) left.appendChild(make('h3', null, tr(t.soustitre)));
 
     var cols = usedColumns(t);
     var wrap = make('div', 'table-wrap');
     var table = make('table');
     var thead = make('thead'), trh = make('tr');
-    cols.forEach(function (c) { var th = make('th', null, t.entetes[c]); th.scope = 'col'; trh.appendChild(th); });
+    cols.forEach(function (c) { var th = make('th', null, tr(t.entetes[c])); th.scope = 'col'; trh.appendChild(th); });
     thead.appendChild(trh); table.appendChild(thead);
 
     var tbody = make('tbody');
     var isComparison = t.entetes[3] === 'Change';
     t.lignes.forEach(function (l) {
-      var tr = make('tr', l.style === 'total' ? 'total' : (l.style === 'selection' ? 'selection' : (l.style === 'attenue' ? 'muted' : '')));
+      var row = make('tr', l.style === 'total' ? 'total' : (l.style === 'selection' ? 'selection' : (l.style === 'attenue' ? 'muted' : '')));
       cols.forEach(function (c) {
-        var td = make('td', null, fmt(l.v[c], l.f && l.f[c]));
+        var text = fmt(l.v[c], l.f && l.f[c]);
+        var td = make('td', null, c === 0 ? tr(text) : text);
         if (c === 0) { td.scope = 'row'; }
         if (l.couleursValeurs && l.couleursValeurs[c]) td.style.color = l.couleursValeurs[c];
         else if (isComparison && c === 3 && isNum(l.evo) && l.evo !== 0 && !l.neutre) td.className = l.evo > 0 ? 'up' : 'down';
         else if (isComparison && (c === 4 || c === 5)) td.className = 'soft';
         else if (!l.couleursValeurs && t.entetes[1] === 'After' && c === 2) td.className = 'soft';
-        tr.appendChild(td);
+        row.appendChild(td);
       });
-      tbody.appendChild(tr);
+      tbody.appendChild(row);
     });
     table.appendChild(tbody);
     wrap.appendChild(table);
     left.appendChild(wrap);
-    if (t.note) left.appendChild(make('p', 'note', t.note));
+    if (t.note) left.appendChild(make('p', 'note', tr(t.note)));
     block.appendChild(left);
 
     if (t.graphique && t.graphique.nb) block.appendChild(renderChart(t, t.graphique));
@@ -281,21 +287,21 @@
   function renderChart(t, g) {
     var card = make('figure', 'chart-card');
     card.style.margin = '0';
-    card.appendChild(make('h4', null, g.titre));
+    card.appendChild(make('h4', null, tr(g.titre)));
     var box = make('div', 'chart-box' + (g.empile ? ' short' : ''));
     var canvas = make('canvas');
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', g.titre + '. The same figures are in the table.');
+    canvas.setAttribute('aria-label', tr(g.titre) + tx('. The same figures are in the table.', '. Les mêmes chiffres figurent dans le tableau.'));
     box.appendChild(canvas);
     card.appendChild(box);
 
     var rows = t.lignes.slice(0, g.nb);
     var pct = g.format === 'pct';
-    var labels = rows.map(function (l) { return String(l.v[0]); });
+    var labels = rows.map(function (l) { return tr(String(l.v[0])); });
     var datasets = g.series.map(function (s, i) {
       var colour = CHART_COLOURS[(g.couleurs[i] || '').toUpperCase()] || g.couleurs[i] || '#2A6AA3';
       return {
-        label: t.entetes[s] || '',
+        label: tr(t.entetes[s] || ''),
         data: rows.map(function (l) { var v = l.v[s]; return isNum(v) ? (pct ? v * 100 : v) : 0; }),
         backgroundColor: colour,
         borderRadius: 4,
@@ -355,6 +361,39 @@
     return card;
   }
 
+  /* ---------------- Language ---------------- */
+
+  /** Texts that live in index.html. */
+  function applyStaticTexts() {
+    document.documentElement.lang = I18N.lang;
+    document.getElementById('l-country').textContent = tx('Country', 'Pays');
+    document.getElementById('l-format').textContent = tx('Session format', 'Format de session');
+    document.getElementById('filters').setAttribute('aria-label', tx('Filters', 'Filtres'));
+    el.kpis.setAttribute('aria-label', tx('Key figures', 'Chiffres clés'));
+    document.getElementById('source').textContent = tx(
+      'Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.',
+      'Source : réponses aux Google Forms et feuilles de présence de la formation commerciale PFS. Les chiffres sont calculés automatiquement à partir du Google Sheet en direct.');
+    if (!lastData) {
+      el.title.textContent = tr(el.title.textContent);
+      document.title = el.title.textContent;
+      el.scope.textContent = tx('Loading…', 'Chargement…');
+      fillSelect(el.country, [ALL_COUNTRIES], ALL_COUNTRIES);
+      fillSelect(el.format, [ALL_FORMATS], ALL_FORMATS);
+    }
+    document.getElementById('lang-en').setAttribute('aria-pressed', I18N.lang === 'en');
+    document.getElementById('lang-fr').setAttribute('aria-pressed', I18N.lang === 'fr');
+  }
+
+  function setLang(l) {
+    if (l === I18N.lang) return;
+    I18N.set(l);
+    applyStaticTexts();
+    writeUrl(el.country.value || ALL_COUNTRIES, el.format.value || ALL_FORMATS);
+    if (lastData) render(lastData);
+  }
+  document.getElementById('lang-en').addEventListener('click', function () { setLang('en'); });
+  document.getElementById('lang-fr').addEventListener('click', function () { setLang('fr'); });
+
   /* ---------------- Start ---------------- */
 
   function onChange() {
@@ -368,6 +407,7 @@
     Chart.defaults.font.family = '"Open Sans", Arial, sans-serif';
     Chart.defaults.color = INK_SOFT;
   }
+  applyStaticTexts();
   var start = readUrl();
   load(start.country, start.format);
 })();

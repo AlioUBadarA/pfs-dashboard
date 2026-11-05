@@ -160,3 +160,16 @@ td.down { color: var(--down); font-weight: 700; }
   .filters { position: static; }
   .block { break-inside: avoid; box-shadow: none; border: 1px solid var(--line); }
 }
+
+/* EN / FR switch */
+.lang { display: flex; margin-left: auto; }
+.lang button {
+  font: inherit; font-weight: 700; font-size: 13px;
+  color: var(--pfs-blue); background: #fff;
+  border: 2px solid var(--pfs-blue); padding: 7px 14px; cursor: pointer;
+}
+.lang button:first-child { border-radius: 8px 0 0 8px; }
+.lang button:last-child { border-radius: 0 8px 8px 0; }
+.lang button + button { border-left: 0; }
+.lang button[aria-pressed="true"] { background: var(--pfs-blue); color: #fff; }
+.lang button:focus-visible { outline: 3px solid var(--oo2-gold); outline-offset: 2px; }

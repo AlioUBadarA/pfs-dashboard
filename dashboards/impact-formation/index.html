@@ -26,17 +26,21 @@
     <div class="stripe" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
   </header>
 
-  <nav class="filters" aria-label="Filters">
+  <nav class="filters" id="filters" aria-label="Filters">
     <div class="filters-inner">
       <label class="filter">
-        <span>Country</span>
+        <span id="l-country">Country</span>
         <select id="f-country" disabled><option>All countries</option></select>
       </label>
       <label class="filter">
-        <span>Session format</span>
+        <span id="l-format">Session format</span>
         <select id="f-format" disabled><option>All formats</option></select>
       </label>
       <p id="scope" class="scope" aria-live="polite">Loading…</p>
+      <div class="lang" role="group" aria-label="Language / Langue">
+        <button type="button" id="lang-en" aria-pressed="true">EN</button>
+        <button type="button" id="lang-fr" aria-pressed="false">FR</button>
+      </div>
     </div>
   </nav>
 
@@ -48,12 +52,13 @@
   </main>
 
   <footer class="foot">
-    <p>Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.</p>
+    <p id="source">Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.</p>
     <p id="updated"></p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
   <script src="assets/config.js"></script>
+  <script src="assets/i18n.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
