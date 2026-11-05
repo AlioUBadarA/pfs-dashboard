@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PFS Sales Training · Impact Dashboard</title>
+  <meta name="description" content="Results of the PFS sales training for rice mills in Benin, Côte d'Ivoire, Senegal and Togo.">
+  <link rel="icon" href="assets/logo-pfs.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <h1 id="title">PFS Sales Training · Impact Dashboard</h1>
+        <p id="subtitle">Partners in Food Solutions × Oo2 Formations &amp; Consulting</p>
+      </div>
+      <div class="logos">
+        <img src="assets/logo-pfs.png" alt="Partners in Food Solutions">
+        <img src="assets/logo-oo2.png" alt="Oo2 Formations &amp; Consulting">
+      </div>
+    </div>
+    <div class="stripe" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  </header>
+
+  <nav class="filters" aria-label="Filters">
+    <div class="filters-inner">
+      <label class="filter">
+        <span>Country</span>
+        <select id="f-country" disabled><option>All countries</option></select>
+      </label>
+      <label class="filter">
+        <span>Session format</span>
+        <select id="f-format" disabled><option>All formats</option></select>
+      </label>
+      <p id="scope" class="scope" aria-live="polite">Loading…</p>
+    </div>
+  </nav>
+
+  <main id="main">
+    <section id="kpis" class="kpis" aria-label="Key figures"></section>
+    <p id="guide" class="guide" hidden></p>
+    <div id="content"></div>
+    <div id="state" class="state" role="status"></div>
+  </main>
+
+  <footer class="foot">
+    <p>Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.</p>
+    <p id="updated"></p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+  <script src="assets/config.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

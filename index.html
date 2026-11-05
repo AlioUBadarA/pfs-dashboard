@@ -1,59 +1,107 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PFS Sales Training · Impact Dashboard</title>
-  <meta name="description" content="Results of the PFS sales training for rice mills in Benin, Côte d'Ivoire, Senegal and Togo.">
-  <link rel="icon" href="assets/logo-pfs.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PFS RIZAO - Tableaux de bord</title>
+<link rel="icon" href="favicon.ico">
+<style>
+:root{--blue:#2A6AA3;--green:#5DB246;--txt:#1F2A37;--soft:#5B6775;--bd:#D0D7DE;--card:#F3F6F9;--t:.6s}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Poppins,"Segoe UI",Arial,sans-serif;color:var(--txt);background:#fff;overflow:hidden}
+button{font:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+
+/* Accueil */
+#home{position:fixed;inset:0;display:flex;flex-direction:column;opacity:1;transition:opacity var(--t) ease;z-index:3;background:#0d2a45}
+#home.off{opacity:0;pointer-events:none}
+#home .bg{position:absolute;inset:0;background:url(assets/photo-equipe.jpg) center 35%/cover no-repeat;transform:scale(1.04);animation:zoom 14s ease-out forwards}
+@keyframes zoom{to{transform:scale(1)}}
+#home .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(13,42,69,.78) 0%,rgba(13,42,69,.35) 38%,rgba(13,42,69,.55) 62%,rgba(13,42,69,.92) 100%)}
+#home .in{position:relative;flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:20px 24px 28px;max-width:1200px;width:100%;margin:0 auto}
+.logos{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.logos span{background:#fff;border-radius:10px;padding:8px 14px;display:flex}
+.logos img{height:44px;width:auto;display:block}
+.hero h1{color:#fff;font-size:clamp(24px,4.2vw,46px);line-height:1.12;margin:0 0 8px;font-weight:700;max-width:760px}
+.hero p{color:#e6eef6;margin:0 0 22px;font-size:clamp(14px,1.8vw,18px)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.cards button{background:rgba(255,255,255,.96);border:0;border-radius:12px;padding:18px 18px 16px;text-align:left;color:var(--txt);border-top:5px solid var(--blue);transition:transform .25s ease,box-shadow .25s ease;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.cards button:nth-child(2){border-top-color:var(--green)}
+.cards button:nth-child(3){border-top-color:#2A6AA3;border-top-color:#1B8C7A}
+.cards button:hover{transform:translateY(-4px);box-shadow:0 12px 26px rgba(0,0,0,.35)}
+.cards b{display:block;font-size:16px;margin-bottom:4px}
+.cards small{color:var(--soft);font-size:12.5px}
+.cards i{display:block;margin-top:12px;font-style:normal;font-weight:600;color:var(--blue);font-size:13px}
+.hero>*{opacity:0;transform:translateY(14px);animation:up .8s ease forwards}
+.hero h1{animation-delay:.2s}.hero p{animation-delay:.4s}.cards{animation-delay:.6s}
+@keyframes up{to{opacity:1;transform:none}}
+
+/* Application */
+#app{position:fixed;inset:0;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity var(--t) ease;z-index:2;background:#fff}
+#app.on{opacity:1;pointer-events:auto}
+header{border-top:5px solid var(--blue);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:14px;padding:8px 16px;flex-wrap:wrap}
+header img{height:34px;width:auto}
+#back{border:1px solid var(--bd);background:var(--card);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--txt)}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+nav button{font-size:13px;padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--txt);border-radius:6px;transition:background .3s,color .3s}
+nav button[aria-selected=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+main{flex:1;min-height:0;position:relative}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;transition:opacity var(--t) ease}
+iframe.on{opacity:1;pointer-events:auto}
+@media(max-width:800px){.cards{grid-template-columns:1fr}.logos img{height:34px}#home .in{overflow:auto}header img{height:28px}nav{margin-left:0;width:100%}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.hero>*{opacity:1;transform:none}}
+</style>
 </head>
 <body>
-  <header class="top">
-    <div class="top-inner">
-      <div class="brand">
-        <h1 id="title">PFS Sales Training · Impact Dashboard</h1>
-        <p id="subtitle">Partners in Food Solutions × Oo2 Formations &amp; Consulting</p>
-      </div>
-      <div class="logos">
-        <img src="assets/logo-pfs.png" alt="Partners in Food Solutions">
-        <img src="assets/logo-oo2.png" alt="Oo2 Formations &amp; Consulting">
+<section id="home" aria-label="Accueil">
+  <div class="bg" role="img" aria-label="Participants aux formations PFS RIZAO"></div><div class="veil"></div>
+  <div class="in">
+    <div class="logos"><span><img src="assets/logo-pfs.png" alt="Partners in Food Solutions"></span><span><img src="assets/logo-oo2.png" alt="Oo2 Formations &amp; Consulting"></span></div>
+    <div class="hero">
+      <h1>PFS RIZAO : tableaux de bord des formations</h1>
+      <p>Choisissez un tableau de bord pour consulter les résultats.</p>
+      <div class="cards">
+        <button data-i="0"><b>Sales Training - Cohorte 1 &amp; 2</b><small>Formation commerciale</small><i>Ouvrir le tableau de bord</i></button>
+        <button data-i="1"><b>Sales Training - Cohorte 3</b><small>Formation commerciale</small><i>Ouvrir le tableau de bord</i></button>
+        <button data-i="2"><b>Digital Fundamentals Training</b><small>Formation aux outils numériques</small><i>Ouvrir le tableau de bord</i></button>
       </div>
     </div>
-    <div class="stripe" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+  </div>
+</section>
+
+<div id="app">
+  <header>
+    <button id="back">Accueil</button>
+    <img src="assets/logo-pfs.png" alt="Partners in Food Solutions">
+    <img src="assets/logo-oo2.png" alt="Oo2 Formations &amp; Consulting">
+    <nav role="tablist" aria-label="Tableaux de bord">
+      <button role="tab" data-src="dashboards/impact-formation/index.html">Sales Training - Cohorte 1 &amp; 2</button>
+      <button role="tab" data-src="dashboards/cohorte-3/index.html">Sales Training - Cohorte 3</button>
+      <button role="tab" data-src="dashboards/digital-fundamentals/index.html">Digital Fundamentals Training</button>
+    </nav>
   </header>
+  <main id="m"></main>
+</div>
 
-  <nav class="filters" aria-label="Filters">
-    <div class="filters-inner">
-      <label class="filter">
-        <span>Country</span>
-        <select id="f-country" disabled><option>All countries</option></select>
-      </label>
-      <label class="filter">
-        <span>Session format</span>
-        <select id="f-format" disabled><option>All formats</option></select>
-      </label>
-      <p id="scope" class="scope" aria-live="polite">Loading…</p>
-    </div>
-  </nav>
-
-  <main id="main">
-    <section id="kpis" class="kpis" aria-label="Key figures"></section>
-    <p id="guide" class="guide" hidden></p>
-    <div id="content"></div>
-    <div id="state" class="state" role="status"></div>
-  </main>
-
-  <footer class="foot">
-    <p>Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.</p>
-    <p id="updated"></p>
-  </footer>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-  <script src="assets/config.js"></script>
-  <script src="assets/app.js"></script>
+<script>
+(function(){
+  var home=document.getElementById('home'),app=document.getElementById('app'),m=document.getElementById('m'),
+      tabs=[].slice.call(document.querySelectorAll('nav button')),frames={};
+  function open(i){
+    var b=tabs[i];if(!b)return;
+    tabs.forEach(function(t){t.setAttribute('aria-selected',t===b?'true':'false')});
+    var src=b.dataset.src;
+    if(!frames[src]){var f=document.createElement('iframe');f.src=src;f.title=b.textContent;m.appendChild(f);frames[src]=f}
+    requestAnimationFrame(function(){Object.keys(frames).forEach(function(k){frames[k].className=k===src?'on':''})});
+    app.classList.add('on');home.classList.add('off');
+    try{history.replaceState(null,'','#'+i)}catch(e){}
+  }
+  function goHome(){app.classList.remove('on');home.classList.remove('off');try{history.replaceState(null,'',location.pathname)}catch(e){}}
+  [].slice.call(document.querySelectorAll('.cards button')).forEach(function(b){b.addEventListener('click',function(){open(+b.dataset.i)})});
+  tabs.forEach(function(b,i){b.addEventListener('click',function(){open(i)})});
+  document.getElementById('back').addEventListener('click',goHome);
+  var i=parseInt((location.hash||'').slice(1),10);if(i>=0&&i<tabs.length)open(i);
+})();
+</script>
 </body>
 </html>
