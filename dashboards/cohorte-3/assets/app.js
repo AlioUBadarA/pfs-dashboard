@@ -105,15 +105,15 @@
     if (hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve(hit.data);
 
     if (!API_URL || API_URL.indexOf('PASTE_') === 0) {
-      return Promise.reject(new Error(tr('The data source is not set yet. Put the web app URL in assets/config.js.', 'La source de données n\'est pas encore configurée. Collez l\'URL de l\'application web dans assets/config.js.')));
+      return Promise.reject(new Error(tr('The data source is missing. Put the web app URL in assets/config.js.', 'La source de données manque. Collez l\'URL de l\'application web dans assets/config.js.')));
     }
     var sep = API_URL.indexOf('?') > -1 ? '&' : '?';
     var url = API_URL + sep + 'country=' + encodeURIComponent(state.country);
     return fetch(url).then(function (r) {
-      if (!r.ok) throw new Error(tr('The data source answered with an error (', 'La source de données a répondu par une erreur (') + r.status + ').');
+      if (!r.ok) throw new Error(tr('The data source sent an error (', 'La source de données a renvoyé une erreur (') + r.status + ').');
       return r.json();
     }).then(function (d) {
-      if (!d || !d.ok) throw new Error((d && d.error) || tr('The data source returned no figures.', 'La source de données n\'a renvoyé aucun chiffre.'));
+      if (!d || !d.ok) throw new Error((d && d.error) || tr('The data source sent no figures.', 'La source de données n\'a envoyé aucun chiffre.'));
       cache[key] = { at: Date.now(), data: d };
       return d;
     });
@@ -123,7 +123,7 @@
     var id = ++requestId;
     writeUrl();
     syncSelects();
-    if (!data) app.replaceChildren(el('p', { class: 'status', text: tr('Loading the figures… The first load can take a few seconds.', 'Chargement des chiffres… Le premier chargement peut prendre quelques secondes.') }));
+    if (!data) app.replaceChildren(el('p', { class: 'status', text: tr('Loading the figures… The first load takes a few seconds.', 'Chargement des chiffres… Le premier chargement prend quelques secondes.') }));
     load().then(function (d) {
       if (id !== requestId) return;
       data = d;
@@ -133,7 +133,7 @@
       if (id !== requestId) return;
       destroyCharts();
       app.replaceChildren(el('div', { class: 'error' }, [
-        el('strong', { text: tr('The figures could not be loaded. ', 'Les chiffres n\'ont pas pu être chargés. ') }),
+        el('strong', { text: tr('The figures did not load. ', 'Les chiffres ne se sont pas chargés. ') }),
         el('span', { text: err.message })
       ]));
       els.updated.textContent = '';
@@ -361,8 +361,8 @@
     var empty = (showBefore() && d.before.n === 0 && (!showAfter() || d.after.n === 0)) || (!showBefore() && d.after.n === 0);
     if (empty) {
       frag.appendChild(el('div', { class: 'notice', text: tr(
-        'No answers yet for this selection. Change a filter or come back after participants have answered.',
-        'Aucune réponse pour cette sélection. Changez un filtre ou revenez après les réponses des participants.') }));
+        'No answers yet for this selection. Change a filter. You can also come back after the answers.',
+        'Aucune réponse pour cette sélection. Changez un filtre. Vous pouvez aussi revenir après les réponses.') }));
     }
 
     var n = 1;
@@ -371,10 +371,10 @@
     frag.appendChild(knowledgeSection(d, n++));
     frag.appendChild(questionSection(d, n++));
     frag.appendChild(el('footer', { class: 'src', text: tr(
-      'Source: test before and form after the PFS Sales Training, Cohort 3 (4 online sessions of 2 hours). Generated automatically from the response sheet. ' +
-      'Only aggregated figures are published: no participant name, phone number or free-text answer.',
-      'Source : test avant et formulaire après la formation commerciale PFS, cohorte 3 (4 sessions en ligne de 2 heures). Généré automatiquement à partir de la feuille de réponses. ' +
-      'Seuls des chiffres agrégés sont publiés : aucun nom, numéro de téléphone ni réponse libre.') }));
+      'Source: test before and form after the PFS Sales Training, Cohort 3 (4 online sessions of 2 hours). The page is computed from the response sheet. ' +
+      'The page publishes aggregated figures only. It shows no name, phone number or free-text answer.',
+      'Source : test avant et formulaire après la formation commerciale PFS, cohorte 3 (4 sessions en ligne de 2 heures). La page se calcule à partir de la feuille de réponses. ' +
+      'La page publie seulement des chiffres agrégés. Elle ne montre aucun nom, numéro de téléphone ni réponse libre.') }));
 
     app.replaceChildren(frag);
     pending.forEach(function (p) { drawChart(p.canvas, p.spec); });
@@ -384,12 +384,12 @@
   /** "How to read" box: a title and one short line per idea. */
   function guide() {
     var items = [
-      [tr('Before', 'Avant'), tr('12-question test, taken once, before the training starts.', 'Test de 12 questions, rempli une fois, avant le début de la formation.')],
-      [tr('After', 'Après'), tr('Form taken once, at the end of the training: the same 12 questions plus the training evaluation.', 'Formulaire rempli une fois, à la fin de la formation : les mêmes 12 questions plus l\'évaluation de la formation.')],
-      [tr('Counting', 'Comptage'), tr('Each person is counted once per phase (latest answer).', 'Chaque personne est comptée une fois par phase (dernière réponse).')],
-      [tr('Same people', 'Mêmes personnes'), tr('People who answered both before and after: the most reliable comparison.', 'Personnes ayant répondu avant et après : la comparaison la plus fiable.')],
-      [tr('Colours', 'Couleurs'), tr('Green = improvement, red = decline.', 'Vert = progression, rouge = recul.')],
-      [tr('Filters', 'Filtres'), tr('Use the two filters above (phase and country): the whole page recalculates.', 'Utilisez les deux filtres ci-dessus (phase et pays) : toute la page se recalcule.')]
+      [tr('Before', 'Avant'), tr('A 12-question test. It is taken once, before the training starts.', 'Test de 12 questions. Rempli une fois, avant le début de la formation.')],
+      [tr('After', 'Après'), tr('The same 12 questions plus the training evaluation. Taken once, at the end of the training.', 'Les mêmes 12 questions et l\'évaluation de la formation. Rempli une fois, à la fin de la formation.')],
+      [tr('Counting', 'Comptage'), tr('Each person counts once per phase. The page keeps the latest answer.', 'Chaque personne compte une fois par phase. La page garde sa dernière réponse.')],
+      [tr('Same people', 'Mêmes personnes'), tr('These people answered both before and after. This is the most reliable comparison.', 'Ces personnes ont répondu avant et après. C\'est la comparaison la plus fiable.')],
+      [tr('Colours', 'Couleurs'), tr('Green = improvement. Red = decline.', 'Vert = progression. Rouge = recul.')],
+      [tr('Filters', 'Filtres'), tr('The two filters, phase and country, recalculate the whole page.', 'Les deux filtres, phase et pays, recalculent toute la page.')]
     ];
     return el('div', { class: 'guide' }, [
       el('h2', { text: tr('HOW TO READ THIS DASHBOARD', 'COMMENT LIRE CE TABLEAU DE BORD') }),
@@ -439,8 +439,8 @@
     var ev = d.evaluation;
     var HA = tr('After', 'Après');
     var sec = section(n + tr('. Training evaluation', '. Évaluation de la formation'),
-      tr('What participants said at the end of the training: satisfaction, expectations and how much they feel they learned. One answer per person (the latest one) in the selected country.',
-         'Ce que les participants ont dit à la fin de la formation : satisfaction, attentes et ce qu\'ils estiment avoir appris. Une réponse par personne (la dernière) dans le pays choisi.'), true);
+      tr('This is what participants said at the end of the training. They rate satisfaction, expectations and what they learned. The page keeps the latest answer of each person in the selected country.',
+         'Voici l\'avis des participants à la fin de la formation. Ils parlent de leur satisfaction, de leurs attentes et de ce qu\'ils ont appris. La page garde la dernière réponse de chaque personne dans le pays choisi.'), true);
 
     sec.appendChild(block(tr('Summary', 'Synthèse'), table(tr('Evaluation summary', 'Synthèse de l\'évaluation'),
       [tr('Indicator', 'Indicateur'), HA, tr('Count', 'Effectif')], [
@@ -473,8 +473,8 @@
           { label: P, data: [nps.passives], color: COLORS.yellow },
           { label: Pr, data: [nps.promoters], color: COLORS.green }
         ] },
-      tr('NPS index = % promoters (rating 5) minus % detractors (ratings 1 to 3). It ranges from -100 to +100; above 0, promoters outnumber detractors.',
-         'Indice NPS = % de promoteurs (note 5) moins % de détracteurs (notes 1 à 3). Il va de -100 à +100 ; au-dessus de 0, les promoteurs sont plus nombreux que les détracteurs.')));
+      tr('NPS index = % promoters (rating 5) minus % detractors (ratings 1 to 3). It ranges from -100 to +100. Above 0, promoters outnumber detractors.',
+         'Indice NPS = % de promoteurs (note 5) moins % de détracteurs (notes 1 à 3). Il va de -100 à +100. Au-dessus de 0, les promoteurs sont plus nombreux que les détracteurs.')));
 
     var tRt = tr('Satisfaction rating (1 to 5)', 'Note de satisfaction (1 à 5)');
     sec.appendChild(block(tRt, distTable(tRt, ev.ratings),
@@ -494,7 +494,7 @@
   /* 2. Knowledge results */
   function knowledgeSection(d, n) {
     var sec = section(n + tr('. Knowledge results', '. Résultats de connaissances'),
-      tr('Overall success rate for the selected country.', 'Taux de réussite global pour le pays choisi.'));
+      tr('Overall success rate in the selected country.', 'Taux de réussite global dans le pays choisi.'));
     var cols = [tr('Indicator', 'Indicateur')];
     if (showBefore()) cols.push(tr('Before', 'Avant'));
     if (showAfter()) cols.push(tr('After', 'Après'));
@@ -520,14 +520,14 @@
     sec.appendChild(block(null, table(tr('Knowledge results', 'Résultats de connaissances'), cols, rows), {
       title: tr('Success rate', 'Taux de réussite') + (state.phase === 'both' ? tr(': before vs after', ' : avant et après') : ''), labels: labels, format: 'pct', datasets: phaseDatasets(b, a)
     }, tr('Same people = answered both the test before and the form after. This is the most reliable measure of progress.',
-          'Mêmes personnes = ont répondu au test avant et au formulaire après. C\'est la mesure de progression la plus fiable.')));
+          'Mêmes personnes = personnes qui ont répondu au test avant et au formulaire après. C\'est la mesure de progression la plus fiable.')));
     return sec;
   }
 
   /* 3. Success by question */
   function questionSection(d, n) {
     var sec = section(n + tr('. Success by question', '. Réussite par question'),
-      tr('Share of people who chose the correct answer, question by question.', 'Part des personnes qui ont choisi la bonne réponse, question par question.'));
+      tr('Share of people who chose the correct answer, for each question.', 'Part des personnes qui ont choisi la bonne réponse, pour chaque question.'));
     var cols = [tr('Question', 'Question')];
     if (showBefore()) cols.push(tr('Before', 'Avant'));
     if (showAfter()) cols.push(tr('After', 'Après'));
@@ -557,8 +557,8 @@
   /* 4. Country representation */
   function countrySection(d, n) {
     var sec = section(n + tr('. Country representation', '. Représentation par pays'),
-      tr('Calculated across all countries. Companies are counted from the name typed in the form.',
-         'Calculé tous pays confondus. Les entreprises sont comptées d\'après le nom saisi dans le formulaire.'));
+      tr('The calculation covers all countries. Companies are counted from the name typed in the form.',
+         'Le calcul porte sur tous les pays. Les entreprises sont comptées d\'après le nom saisi dans le formulaire.'));
     var cols = [tr('Country', 'Pays'), tr('Companies', 'Entreprises')];
     if (showBefore()) cols.push(tr('Tests before', 'Tests avant'));
     if (showAfter()) cols.push(tr('Forms after', 'Formulaires après'));

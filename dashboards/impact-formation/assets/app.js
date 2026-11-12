@@ -116,7 +116,7 @@
       url = 'demo.json';
     } else {
       if (!cfg.API_URL || cfg.API_URL.indexOf('http') !== 0) {
-        setState(tx('The data address is not set yet: paste the Apps Script web app URL in assets/config.js.', 'L\'adresse des données n\'est pas encore définie : collez l\'URL de l\'application web Apps Script dans assets/config.js.'), true);
+        setState(tx('The data address is missing. Paste the Apps Script web app URL in assets/config.js.', 'L\'adresse des données manque. Collez l\'URL de l\'application web Apps Script dans assets/config.js.'), true);
         return;
       }
       url = cfg.API_URL + (cfg.API_URL.indexOf('?') > -1 ? '&' : '?') +
@@ -135,7 +135,7 @@
       })
       .catch(function (err) {
         if (id !== requestId) return;
-        if (!cached) setState(tx('The figures could not be loaded (' + err.message + '). Please refresh the page in a minute.', 'Les chiffres n\'ont pas pu être chargés (' + err.message + '). Rechargez la page dans une minute.'), true);
+        if (!cached) setState(tx('The figures did not load (' + err.message + '). Refresh the page in a minute.', 'Les chiffres ne se sont pas chargés (' + err.message + '). Rechargez la page dans une minute.'), true);
       })
       .then(function () {
         if (id !== requestId) return;
@@ -291,7 +291,7 @@
     var box = make('div', 'chart-box' + (g.empile ? ' short' : ''));
     var canvas = make('canvas');
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', tr(g.titre) + tx('. The same figures are in the table.', '. Les mêmes chiffres figurent dans le tableau.'));
+    canvas.setAttribute('aria-label', tr(g.titre) + tx('. The same figures are in the table.', '. Le tableau donne les mêmes chiffres.'));
     box.appendChild(canvas);
     card.appendChild(box);
 
@@ -371,8 +371,8 @@
     document.getElementById('filters').setAttribute('aria-label', tx('Filters', 'Filtres'));
     el.kpis.setAttribute('aria-label', tx('Key figures', 'Chiffres clés'));
     document.getElementById('source').textContent = tx(
-      'Source: Google Forms answers and attendance sheets of the PFS sales training. Figures are computed automatically from the live Google Sheet.',
-      'Source : réponses aux Google Forms et feuilles de présence de la formation commerciale PFS. Les chiffres sont calculés automatiquement à partir du Google Sheet en direct.');
+      'Source: Google Forms answers and attendance sheets of the PFS sales training. The figures come from the live Google Sheet.',
+      'Source : réponses aux Google Forms et feuilles de présence de la formation commerciale PFS. Les chiffres viennent du Google Sheet en direct.');
     if (!lastData) {
       el.title.textContent = tr(el.title.textContent);
       document.title = el.title.textContent;
