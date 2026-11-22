@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://script.google.com https://script.googleusercontent.com; base-uri 'self'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Espace Digital Fundamentals</title>
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/espace.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-text">
+      <h1>Espace Digital Fundamentals</h1>
+      <p class="sub" id="who">Coordination et formateurs</p>
+    </div>
+    <div class="logos">
+      <img src="assets/logo-pfs.png" alt="Partners in Food Solutions" width="277" height="96">
+      <img src="assets/logo-oo2.png" alt="Oo2 Formations &amp; Consulting" width="288" height="96">
+    </div>
+  </header>
+  <div class="strip" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <nav class="esp-bar" id="bar" hidden>
+    <div class="esp-tabs" id="tabs" role="tablist"></div>
+    <div class="esp-bar-right">
+      <button type="button" class="btn ghost" id="refresh">Actualiser</button>
+      <button type="button" class="btn ghost" id="logout">Se déconnecter</button>
+    </div>
+  </nav>
+
+  <main class="esp" id="app" aria-live="polite">
+    <section class="card esp-login" id="login">
+      <h2>Connexion</h2>
+      <p class="soft">Entrez votre adresse e-mail. Vous recevrez un code à 6 chiffres.</p>
+      <form id="f-email" novalidate>
+        <label for="email">Adresse e-mail</label>
+        <input id="email" type="email" autocomplete="email" inputmode="email" required maxlength="120">
+        <button type="submit" class="btn">Recevoir un code</button>
+      </form>
+      <form id="f-code" novalidate hidden>
+        <p class="soft" id="code-msg"></p>
+        <label for="code">Code reçu par e-mail</label>
+        <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+        <button type="submit" class="btn">Se connecter</button>
+        <button type="button" class="btn ghost" id="back">Changer d'adresse</button>
+      </form>
+      <p class="esp-error" id="login-error" role="alert"></p>
+    </section>
+    <div id="view"></div>
+  </main>
+
+  <div class="esp-toast" id="toast" role="status" hidden></div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/espace.js"></script>
+</body>
+</html>

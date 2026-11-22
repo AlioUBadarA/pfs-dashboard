@@ -1,0 +1,79 @@
+/* Espace coordination et formateurs. Reprend les couleurs du tableau de bord (style.css). */
+[hidden] { display: none !important; }
+.esp { max-width: 1120px; margin: 0 auto; padding: 18px 16px 80px; text-align: left; }
+.esp h2 { color: var(--pfs-blue); font-size: 20px; margin: 0 0 8px; }
+.esp h3 { font-size: 16px; margin: 0; }
+.soft { color: var(--soft); }
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+
+.esp-login { max-width: 420px; margin: 24px auto; }
+.esp label { display: block; font-weight: 500; margin: 10px 0 4px; }
+.esp input, .esp select, .esp textarea {
+  width: 100%; font: inherit; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--text);
+}
+.esp textarea { min-height: 140px; resize: vertical; }
+.esp input:focus, .esp select:focus, .esp textarea:focus { outline: 2px solid var(--pfs-blue); outline-offset: 1px; }
+.esp-error { color: var(--down); min-height: 1.2em; margin: 10px 0 0; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 9px 14px; margin-top: 10px;
+  background: var(--pfs-blue); color: #fff; cursor: pointer; text-decoration: none; min-height: 40px;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.ghost { background: transparent; color: var(--pfs-blue); border: 1px solid var(--pfs-blue); }
+.btn.small { padding: 6px 10px; min-height: 34px; margin-top: 0; font-size: 13px; }
+.btn.wa { background: #1FAF55; }
+.btn.wa.done { background: #E8F5E9; color: var(--up); border: 1px solid #A5D6A7; }
+.btn.wa.suggested { box-shadow: 0 0 0 3px #FFE08A; }
+
+.esp-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--filter-bg); padding: 8px max(16px, calc((100% - 1120px) / 2));
+}
+.esp-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.esp-tabs button { font: inherit; border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; cursor: pointer; color: var(--text); }
+.esp-tabs button[aria-selected="true"] { background: #fff; color: var(--pfs-blue); font-weight: 600; }
+.esp-bar-right { display: flex; gap: 6px; }
+.esp-bar-right .btn { margin-top: 0; }
+
+.esp-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-bottom: 12px; }
+.esp-tools > * { flex: 0 1 auto; }
+.esp-tools select { width: auto; min-width: 180px; }
+
+.sess-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: baseline; }
+.sess-date { font-weight: 600; color: var(--pfs-blue); }
+.sess-meta { color: var(--soft); font-size: 13px; margin: 2px 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--card-bg); border: 1px solid var(--border); white-space: nowrap; }
+.chip.ok { background: #E8F5E9; border-color: #A5D6A7; color: var(--up); }
+.chip.ko { background: #FDECEA; border-color: #F5B7B1; color: var(--down); }
+.chip.warn { background: var(--guide-bg); border-color: #F3D27A; color: #8A6100; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.row-actions select { width: auto; min-width: 200px; }
+
+.learners { list-style: none; padding: 0; margin: 10px 0 0; }
+.learners li { border-top: 1px solid var(--border); padding: 10px 0; }
+.learners .name { font-weight: 600; }
+.learners .sent { display: block; font-size: 11px; font-weight: 400; }
+
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
+@media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+
+.esp-toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  background: var(--text); color: #fff; padding: 10px 16px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.2); z-index: 10;
+}
+.esp-toast.err { background: var(--down); }
+
+.relay {
+  position: sticky; bottom: 0; background: #fff; border: 2px solid var(--pfs-green); border-radius: 12px; padding: 12px; margin-top: 12px;
+}
+.empty { color: var(--soft); font-style: italic; }
+
+@media (max-width: 640px) {
+  .hero h1 { font-size: 20px; }
+  .logos img { height: 36px; }
+  .row-actions select, .esp-tools select { min-width: 0; width: 100%; }
+}
