@@ -87,6 +87,7 @@
 
   function logout(expired) {
     state.token = ''; save(''); state.role = ''; state.admin = null; state.trainer = null; state.relay = null;
+    try { sessionStorage.removeItem(DATA_KEY); } catch (e) { /* rien */ }
     $('bar').hidden = true; clear($('view')); $('login').hidden = false;
     $('f-code').hidden = true; $('f-email').hidden = false; $('who').textContent = 'Coordination et formateurs';
     if (expired) $('login-error').textContent = 'Votre session a expiré. Reconnectez-vous.';
@@ -105,14 +106,27 @@
     refresh();
   }
 
+  /* Affiche tout de suite les dernieres donnees connues, puis les met a jour en arriere-plan. */
+  var DATA_KEY = 'pfs_espace_data';
+  function loadData() { try { var s = JSON.parse(sessionStorage.getItem(DATA_KEY) || 'null'); return s && s.role === state.role ? s.data : null; } catch (e) { return null; } }
+  function saveData(d) { try { sessionStorage.setItem(DATA_KEY, JSON.stringify({ role: state.role, data: d })); } catch (e) { /* stockage plein ou bloque */ } }
+
   function refresh() {
-    var v = clear($('view'));
-    v.appendChild(el('p', { cls: 'soft', text: 'Chargement…' }));
+    var v = $('view');
+    var cached = loadData();
+    var hasData = state.role === 'admin' ? state.admin : state.trainer;
+    if (!hasData && cached) { if (state.role === 'admin') state.admin = cached; else state.trainer = cached; }
+    if (state.admin || state.trainer) { render(); busy($('refresh'), true); $('refresh').textContent = 'Mise à jour…'; }
+    else { clear(v).appendChild(el('p', { cls: 'soft', text: 'Chargement…' })); }
     var action = state.role === 'admin' ? 'adminData' : 'trainerData';
     return api(action).then(function (d) {
       if (state.role === 'admin') state.admin = d; else state.trainer = d;
-      render();
-    }).catch(function (e) { clear(v).appendChild(el('p', { cls: 'esp-error', text: e.message })); });
+      saveData(d);
+      if (!state.relay) render();                  // ne pas couper une relance en cours
+    }).catch(function (e) {
+      if (state.admin || state.trainer) toast(e.message, true);
+      else clear(v).appendChild(el('p', { cls: 'esp-error', text: e.message }));
+    }).then(function () { busy($('refresh'), false); $('refresh').textContent = 'Actualiser'; });
   }
 
   function render() {
