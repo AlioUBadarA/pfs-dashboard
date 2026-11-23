@@ -370,36 +370,210 @@
       });
   }
 
-  /* Coller depuis Excel ou saisir : Nom ; Fonction ; Telephone ; E-mail (une ligne par apprenant) */
-  function parseLearners(text) {
-    return text.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean).map(function (line) {
-      var c = line.split(/\t|;/).map(function (x) { return x.trim(); });
-      return { nom: c[0] || '', fonction: c[1] || '', tel: c[2] || '', email: c[3] || '' };
+  /* ---------- import Excel : modeles, lecture, controle ---------- */
+  var COLS = {
+    apprenants: [
+      ['code', 'Code session', ['code session', 'session', 'code']],
+      ['nom', 'Nom complet', ['nom complet', 'nom et prenom', 'prenom et nom', 'nom', 'apprenant', 'participant']],
+      ['fonction', 'Fonction', ['fonction', 'poste', 'role']],
+      ['tel', 'Téléphone WhatsApp', ['telephone whatsapp', 'numero whatsapp', 'whatsapp', 'telephone', 'tel', 'numero', 'contact']],
+      ['email', 'E-mail (facultatif)', ['e-mail (facultatif)', 'e-mail', 'email', 'mail', 'adresse e-mail', 'adresse mail']]
+    ],
+    formateurs: [
+      ['code', 'Code formateur', ['code formateur', 'code']],
+      ['nom', 'Nom', ['nom complet', 'nom et prenom', 'prenom et nom', 'nom', 'formateur', 'instructeur']],
+      ['email', 'E-mail', ['e-mail', 'email', 'mail', 'adresse e-mail', 'adresse mail']],
+      ['tel', 'Téléphone WhatsApp', ['telephone whatsapp', 'numero whatsapp', 'whatsapp', 'telephone', 'tel', 'numero']],
+      ['pays', 'Pays', ['pays', 'country']]
+    ]
+  };
+  function hnorm(s) { return norm(s).replace(/[^a-z0-9()@-]+/g, ' ').trim(); }
+
+  /* Repere la ligne d'en-tete (dans les 10 premieres) et la colonne de chaque champ. */
+  function mapColumns(rows, kind) {
+    var defs = COLS[kind], need = kind === 'apprenants' ? ['nom', 'tel'] : ['code', 'nom', 'email'];
+    for (var r = 0; r < Math.min(10, rows.length); r++) {
+      var heads = rows[r].map(hnorm), pos = {}, used = {};
+      defs.forEach(function (d) {
+        var i = -1;
+        d[2].some(function (a) { i = heads.findIndex(function (h, k) { return !used[k] && h === a; }); return i !== -1; });
+        if (i === -1) d[2].some(function (a) { if (a.length < 4) return false; i = heads.findIndex(function (h, k) { return !used[k] && h.indexOf(a) === 0; }); return i !== -1; });
+        if (i !== -1) { pos[d[0]] = i; used[i] = 1; }
+      });
+      if (need.every(function (k) { return pos[k] !== undefined; })) return { headerRow: r, pos: pos };
+    }
+    throw new Error('Colonnes introuvables. La première ligne doit contenir : ' + defs.filter(function (d) { return need.indexOf(d[0]) !== -1; }).map(function (d) { return d[1]; }).join(', ') + '. Partez du modèle.');
+  }
+
+  function isEmail(v) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+  function phone8(v) { var d = String(v || '').replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : ''; }
+
+  /* Lignes du fichier -> { ok: [...], errors: ['Ligne 4 : ...'] } */
+  function checkRows(rows, kind, session) {
+    var m = mapColumns(rows, kind), ok = [], errors = [], seen = {};
+    var codes = {}; state.admin.sessions.forEach(function (s) { codes[s.code] = s; });
+    rows.slice(m.headerRow + 1).forEach(function (r, i) {
+      var line = m.headerRow + i + 2, rec = {};
+      Object.keys(m.pos).forEach(function (k) { rec[k] = String(r[m.pos[k]] || '').trim(); });
+      if (!Object.keys(rec).some(function (k) { return rec[k]; })) return;          // ligne vide
+      var bad = [];
+      if (kind === 'apprenants') {
+        if (session) { if (rec.code && rec.code !== session.code) bad.push('code session différent de ' + session.code); rec.code = session.code; }
+        else if (!rec.code) bad.push('code session manquant');
+        else if (!codes[rec.code]) bad.push('session ' + rec.code + ' inconnue');
+        if (!rec.nom) bad.push('nom manquant');
+        var digits = rec.tel.replace(/\D/g, '');
+        if (digits.length < 8 || digits.length > 15) bad.push('téléphone illisible');
+        if (rec.email && !isEmail(rec.email)) bad.push('e-mail invalide');
+        var key = rec.code + '|' + phone8(rec.tel);
+        if (!bad.length && seen[key]) bad.push('numéro en double dans le fichier (ligne ' + seen[key] + ')');
+        if (!bad.length) seen[key] = line;
+      } else {
+        if (!/^[A-Za-z0-9_-]{2,20}$/.test(rec.code || '')) bad.push('code formateur invalide (lettres, chiffres et tirets)');
+        if (!rec.nom) bad.push('nom manquant');
+        if (!isEmail(rec.email || '')) bad.push('e-mail invalide');
+        if (rec.pays && state.admin.pays.indexOf(rec.pays) === -1) bad.push('pays inconnu : ' + rec.pays);
+        if (!bad.length && seen[rec.code]) bad.push('code en double dans le fichier (ligne ' + seen[rec.code] + ')');
+        if (!bad.length) seen[rec.code] = line;
+      }
+      if (bad.length) errors.push('Ligne ' + line + (rec.nom ? ' (' + rec.nom + ')' : '') + ' : ' + bad.join(', '));
+      else ok.push(rec);
+    });
+    return { ok: ok, errors: errors };
+  }
+
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = el('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function templateLearners(session) {
+    var A = state.admin;
+    var head = COLS.apprenants.map(function (d) { return d[1]; });
+        var sheets = [
+      { name: 'Apprenants', rows: [head], widths: [18, 30, 24, 22, 30] },
+      { name: 'Sessions', rows: [['Code session', 'Entreprise', 'Date', 'Ville', 'Pays']].concat(A.sessions.filter(isActive).map(function (s) {
+        return [s.code, s.entreprise, fr(s.day), s.ville, s.pays]; })), widths: [18, 30, 14, 18, 16] },
+      { name: 'Consignes', rows: [['Comment remplir la feuille Apprenants'],
+        ['Une ligne par apprenant. Ne changez pas les titres de la première ligne.'],
+        [session ? 'Code session : laissez vide. Le fichier est importé dans la session ' + session.code + '.' : 'Code session : copiez-le depuis la feuille Sessions. Il est obligatoire.'],
+        ['Nom complet : prénom et nom.'],
+        ['Téléphone WhatsApp : avec l\'indicatif, par exemple +221 77 123 45 67. La colonne est au format texte : le + et les zéros restent.'],
+        ['E-mail : facultatif.'],
+        ['Enregistrez au format Classeur Excel (.xlsx), puis importez le fichier dans l\'espace.']], widths: [110], noteRows: [1, 2, 3, 4, 5, 6] }
+    ];
+    downloadBlob(XlsxMini.writeXlsx(sheets), 'modele-apprenants' + (session ? '-' + session.code.replace(/[^A-Za-z0-9_-]/g, '') : '') + '.xlsx');
+  }
+
+  function templateTrainers() {
+    var A = state.admin;
+    var sheets = [
+      { name: 'Formateurs', rows: [COLS.formateurs.map(function (d) { return d[1]; })], widths: [16, 30, 32, 22, 18] },
+      { name: 'Pays', rows: [['Pays acceptés']].concat(A.pays.map(function (p) { return [p]; })), widths: [24] },
+      { name: 'Consignes', rows: [['Comment remplir la feuille Formateurs'],
+        ['Une ligne par formateur. Ne changez pas les titres de la première ligne.'],
+        ['Code formateur : court et unique, par exemple SN-01. Lettres, chiffres et tirets seulement.'],
+        ['Si le code existe déjà, la ligne met à jour ce formateur.'],
+        ['E-mail : obligatoire. Il sert à la connexion à l\'espace.'],
+        ['Pays : recopiez un nom de la feuille Pays.'],
+        ['Enregistrez au format Classeur Excel (.xlsx), puis importez le fichier dans l\'espace.']], widths: [110], noteRows: [1, 2, 3, 4, 5, 6] }
+    ];
+    downloadBlob(XlsxMini.writeXlsx(sheets), 'modele-formateurs.xlsx');
+  }
+
+  /* Fenetre d'import commune. kind : 'apprenants' ou 'formateurs'. session : session imposee (apprenants) ou null. */
+  function importForm(kind, session) {
+    var parsed = null;
+    var fileIn = el('input', { id: 'imp-file', type: 'file', accept: '.xlsx,.csv' });
+    var report = el('div', { cls: 'imp-report' });
+    var tplBtn = el('button', { type: 'button', cls: 'btn ghost small', text: 'Télécharger le modèle Excel',
+      onclick: function () { if (kind === 'apprenants') templateLearners(session); else templateTrainers(); } });
+    var ta = kind === 'apprenants' ? el('textarea', { id: 'imp-paste', placeholder: (session ? '' : 'DF-SN-01 ; ') + 'Awa Diop ; Commerciale ; +221 77 123 45 67 ; awa@exemple.sn' }) : null;
+
+    function show(res) {
+      parsed = res;
+      clear(report);
+      report.appendChild(el('div', { cls: 'chips' }, [chip(plural(res.ok.length, 'ligne prête', 'lignes prêtes'), res.ok.length ? 'ok' : 'warn'),
+        res.errors.length ? chip(plural(res.errors.length, 'ligne à corriger', 'lignes à corriger'), 'ko') : null]));
+      if (res.errors.length) {
+        report.appendChild(el('ul', { cls: 'imp-errors' }, res.errors.slice(0, 8).map(function (e) { return el('li', { text: e }); })));
+        if (res.errors.length > 8) report.appendChild(el('p', { cls: 'soft', text: 'Et ' + (res.errors.length - 8) + ' autre(s).' }));
+        report.appendChild(el('p', { cls: 'soft', text: 'Les lignes à corriger ne seront pas importées. Corrigez le fichier puis choisissez-le à nouveau, ou importez seulement les lignes prêtes.' }));
+      }
+      if (res.ok.length) {
+        var keys = kind === 'apprenants' ? ['code', 'nom', 'fonction', 'tel'] : ['code', 'nom', 'email', 'pays'];
+        var heads = kind === 'apprenants' ? ['Session', 'Nom', 'Fonction', 'Téléphone'] : ['Code', 'Nom', 'E-mail', 'Pays'];
+        report.appendChild(el('table', { cls: 'lt imp-preview' }, [
+          el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { text: h }); }))]),
+          el('tbody', {}, res.ok.slice(0, 5).map(function (r) { return el('tr', {}, keys.map(function (k) { return el('td', { text: r[k] || '' }); })); }))]));
+        if (res.ok.length > 5) report.appendChild(el('p', { cls: 'soft', text: 'Aperçu des 5 premières lignes.' }));
+      }
+    }
+    function fail(e) { parsed = null; clear(report).appendChild(el('p', { cls: 'esp-error', text: e.message })); }
+
+    fileIn.addEventListener('change', function () {
+      if (!fileIn.files[0]) return;
+      if (ta) ta.value = '';
+      clear(report).appendChild(el('p', { cls: 'soft', text: 'Lecture du fichier…' }));
+      XlsxMini.readFile(fileIn.files[0]).then(function (rows) { show(checkRows(rows, kind, session)); }).catch(fail);
+    });
+    if (ta) ta.addEventListener('input', function () {
+      fileIn.value = '';
+      if (!ta.value.trim()) { parsed = null; clear(report); return; }
+      var head = (session ? [] : ['Code session']).concat(['Nom complet', 'Fonction', 'Téléphone WhatsApp', 'E-mail']);
+      var rows = [head].concat(ta.value.split(/\r?\n/).filter(function (l) { return l.trim(); }).map(function (l) { return l.split(/\t|;/).map(function (x) { return x.trim(); }); }));
+      try { show(checkRows(rows, kind, session)); } catch (e) { fail(e); }
+    });
+
+    var body = [
+      session ? el('p', { cls: 'soft', text: session.entreprise + ' · ' + session.code }) : null,
+      el('ol', { cls: 'imp-steps' }, [
+        el('li', {}, ['Téléchargez le modèle et remplissez-le dans Excel. ', tplBtn]),
+        el('li', { text: 'Enregistrez-le en .xlsx, puis choisissez-le ci-dessous. Un fichier CSV marche aussi.' }),
+        el('li', { text: 'Vérifiez le contrôle, puis cliquez sur Importer.' })
+      ]),
+      field('Fichier Excel', fileIn)
+    ];
+    if (ta) body.push(el('details', { cls: 'imp-paste' }, [el('summary', { text: 'Ou coller une liste (une ligne par apprenant)' }), ta]));
+    body.push(report);
+
+    modal(kind === 'apprenants' ? 'Importer des apprenants' : 'Importer des formateurs', body, function () {
+      if (!parsed) throw new Error('Choisissez d\'abord un fichier.');
+      if (!parsed.ok.length) throw new Error('Aucune ligne prête à importer.');
+      return kind === 'apprenants' ? sendLearners(parsed.ok) : sendTrainers(parsed.ok);
+    }, { saveLabel: 'Importer' });
+  }
+
+  function chunks(list, n) { var out = []; for (var i = 0; i < list.length; i += n) out.push(list.slice(i, i + n)); return out; }
+
+  function sendLearners(rows) {
+    var groups = {};
+    rows.forEach(function (r) { (groups[r.code] = groups[r.code] || []).push({ nom: r.nom, fonction: r.fonction || '', tel: r.tel, email: r.email || '' }); });
+    var added = 0, skipped = [];
+    return Object.keys(groups).reduce(function (p, code) {
+      return chunks(groups[code], 40).reduce(function (q, ch) {
+        return q.then(function () { return api('addLearners', { code: code, learners: ch }).then(function (r) { added += r.added; skipped = skipped.concat(r.skipped); }); });
+      }, p).then(function () { state.open[code] = true; });
+    }, Promise.resolve()).then(function () {
+      if (skipped.length) { setTimeout(function () { toast(added + ' ajouté(s). Non ajoutés : ' + skipped.slice(0, 6).join(', ') + (skipped.length > 6 ? '…' : ''), true); }, 50); return ''; }
+      return plural(added, 'apprenant ajouté', 'apprenants ajoutés') + '.';
     });
   }
 
-  function learnersForm(s) {
-    var ta = el('textarea', { id: 'l-list', placeholder: 'Awa Diop ; Commerciale ; +221 77 123 45 67 ; awa@exemple.sn\nMoussa Fall ; Comptable ; 78 222 22 22' });
-    var count = el('p', { cls: 'soft', text: '0 apprenant détecté.' });
-    ta.addEventListener('input', function () { count.textContent = parseLearners(ta.value).length + ' apprenant(s) détecté(s).'; });
-    modal('Ajouter des apprenants', [
-      el('p', { cls: 'soft', text: s.entreprise + ' · ' + s.code }),
-      el('p', { cls: 'soft', text: 'Une ligne par apprenant : Nom ; Fonction ; Téléphone WhatsApp ; E-mail (facultatif). Vous pouvez coller les colonnes depuis Excel.' }),
-      field('Liste', ta), count],
-      function () {
-        var list = parseLearners(ta.value);
-        if (!list.length) throw new Error('La liste est vide.');
-        var chunks = []; for (var i = 0; i < list.length; i += 40) chunks.push(list.slice(i, i + 40));
-        var added = 0, skipped = [];
-        return chunks.reduce(function (p, ch) {
-          return p.then(function () { return api('addLearners', { code: s.code, learners: ch }).then(function (r) { added += r.added; skipped = skipped.concat(r.skipped); }); });
-        }, Promise.resolve()).then(function () {
-          state.open[s.code] = true;
-          if (skipped.length) { setTimeout(function () { toast(added + ' ajouté(s). Non ajoutés : ' + skipped.join(', '), true); }, 50); return ''; }
-          return added + ' apprenant(s) ajouté(s).';
-        });
-      }, { saveLabel: 'Ajouter' });
+  function sendTrainers(rows) {
+    var created = 0, updated = 0, skipped = [];
+    return chunks(rows, 40).reduce(function (p, ch) {
+      return p.then(function () { return api('importTrainers', { trainers: ch }).then(function (r) { created += r.created; updated += r.updated; skipped = skipped.concat(r.skipped); }); });
+    }, Promise.resolve()).then(function () {
+      var msg = created + ' formateur(s) ajouté(s), ' + updated + ' mis à jour.';
+      if (skipped.length) { setTimeout(function () { toast(msg + ' Non importés : ' + skipped.slice(0, 6).join(', '), true); }, 50); return ''; }
+      return msg;
+    });
   }
+
+  function learnersForm(s) { importForm('apprenants', s); }
 
   /* ---------- coordination : apprenants ---------- */
   function learnerTable(ls, withSession) {
@@ -438,7 +612,8 @@
     var exportBtn = el('button', { type: 'button', cls: 'btn ghost', text: 'Exporter (CSV)' });
     v.appendChild(el('section', { cls: 'toolbar' }, [
       el('div', { cls: 'toolbar-row' }, [
-        searchBox('q-learn', state.lq, 'Chercher un nom, un téléphone, une fonction ou un e-mail', function (val) { state.lq = val; drawList(); })
+        searchBox('q-learn', state.lq, 'Chercher un nom, un téléphone, une fonction ou un e-mail', function (val) { state.lq = val; drawList(); }),
+        el('button', { type: 'button', cls: 'btn', text: 'Importer (Excel)', onclick: function () { importForm('apprenants', null); } })
       ]),
       el('div', { cls: 'toolbar-row' }, [sSel, stSel, el('span', { cls: 'spacer' }), countEl, exportBtn])
     ]));
@@ -546,6 +721,7 @@
     var box = el('div');
     v.appendChild(el('section', { cls: 'toolbar' }, [el('div', { cls: 'toolbar-row' }, [
       searchBox('q-tr', '', 'Chercher un formateur', function (val) { draw(val); }),
+      el('button', { type: 'button', cls: 'btn ghost', text: 'Importer (Excel)', onclick: function () { importForm('formateurs', null); } }),
       el('button', { type: 'button', cls: 'btn', text: 'Nouveau formateur', onclick: function () { trainerForm(null); } })
     ])]));
     v.appendChild(box);

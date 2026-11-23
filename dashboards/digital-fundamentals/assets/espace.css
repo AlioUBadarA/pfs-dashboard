@@ -255,3 +255,17 @@ dialog.modal::backdrop { background: rgba(28, 37, 48, .45); }
   .stat b { font-size: 28px; }
   .login-card { padding: 26px 18px; }
 }
+
+/* ---------- import Excel ---------- */
+.imp-steps { margin: 8px 0 4px; padding-left: 20px; color: var(--ink); }
+.imp-steps li { margin: 6px 0; }
+.imp-steps .btn { margin-left: 4px; }
+input[type="file"] { background: #fff; border-style: dashed; padding: 14px; cursor: pointer; }
+.imp-paste { margin-top: 12px; }
+.imp-paste summary { cursor: pointer; color: var(--blue); font-size: 14px; }
+.imp-paste textarea { margin-top: 8px; min-height: 110px; }
+.imp-report { margin-top: 12px; }
+.imp-errors { margin: 8px 0; padding: 10px 12px 10px 28px; background: var(--ko-soft); color: var(--ko); border-radius: 12px; font-size: 13px; }
+.imp-errors li { margin: 2px 0; }
+.imp-preview { margin-top: 8px; font-size: 13px; }
+.imp-preview td { padding: 6px 10px; }
