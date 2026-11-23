@@ -1,4 +1,4 @@
-/* Espace Digital Fundamentals : attribution des sessions (coordination) et page des formateurs.
+/* Espace Digital Fundamentals : coordination (sessions, apprenants, formateurs) et page des formateurs.
  * Toutes les donnees viennent de l'application web Apps Script (doPost), apres connexion par code.
  * Le serveur verifie le role a chaque requete. Cette page n'affiche du texte qu'avec textContent. */
 (function () {
@@ -6,8 +6,14 @@
 
   var API_URL = (window.PFS_CONFIG && window.PFS_CONFIG.API_URL) || '';
   var TOKEN_KEY = 'pfs_espace_token';
+  var DATA_KEY = 'pfs_espace_data';
+  var MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   var $ = function (id) { return document.getElementById(id); };
-  var state = { token: load(), role: '', nom: '', tab: '', admin: null, trainer: null, filter: 'avenir', relay: null };
+  var state = {
+    token: load(), role: '', nom: '', tab: '', admin: null, trainer: null, relay: null,
+    filter: 'avenir', q: '', open: {},                        // sessions
+    lq: '', lsess: '', lstat: ''                              // apprenants
+  };
 
   /* ---------- outils ---------- */
   function load() { try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
@@ -35,11 +41,14 @@
     if (dd === -1) return 'hier';
     return dd > 0 ? 'dans ' + dd + ' jours' : 'il y a ' + (-dd) + ' jours';
   }
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function plural(n, one, many) { return n + ' ' + (n > 1 ? many : one); }
+
   var toastTimer = null;
   function toast(msg, isErr) {
     var t = $('toast');
     t.textContent = msg; t.className = 'esp-toast' + (isErr ? ' err' : ''); t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 4000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, isErr ? 6000 : 4000);
   }
 
   function api(action, payload) {
@@ -70,6 +79,8 @@
     }).catch(function (e) { $('login-error').textContent = e.message; }).then(function () { busy(btn, false); });
   });
 
+  $('code').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 6); });
+
   $('f-code').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var btn = ev.submitter || this.querySelector('button');
@@ -88,26 +99,39 @@
   function logout(expired) {
     state.token = ''; save(''); state.role = ''; state.admin = null; state.trainer = null; state.relay = null;
     try { sessionStorage.removeItem(DATA_KEY); } catch (e) { /* rien */ }
-    $('bar').hidden = true; clear($('view')); $('login').hidden = false;
+    $('bar').hidden = true; $('top-actions').hidden = true; clear($('view')); $('login').hidden = false;
     $('f-code').hidden = true; $('f-email').hidden = false; $('who').textContent = 'Coordination et formateurs';
     if (expired) $('login-error').textContent = 'Votre session a expiré. Reconnectez-vous.';
   }
 
   function start() {
-    $('login').hidden = true; $('bar').hidden = false;
-    $('who').textContent = state.role === 'admin' ? 'Coordination' : 'Espace formateur' + (state.nom ? ' : ' + state.nom : '');
-    var tabs = state.role === 'admin' ? [['sessions', 'Sessions'], ['formateurs', 'Formateurs']] : [['mes', 'Mes sessions']];
-    state.tab = tabs[0][0];
-    var bar = clear($('tabs'));
-    tabs.forEach(function (t) {
-      bar.appendChild(el('button', { type: 'button', role: 'tab', 'aria-selected': String(t[0] === state.tab), 'data-tab': t[0], text: t[1],
-        onclick: function () { state.tab = t[0]; Array.prototype.forEach.call(bar.children, function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-tab') === t[0])); }); render(); } }));
-    });
+    $('login').hidden = true; $('top-actions').hidden = false;
+    $('who').textContent = state.role === 'admin' ? 'Espace coordination' : 'Espace formateur' + (state.nom ? ' · ' + state.nom : '');
+    if (state.role === 'admin') {
+      state.tab = 'sessions';
+      $('bar').hidden = false;
+      drawTabs();
+    } else {
+      state.tab = 'mes';
+      $('bar').hidden = true;
+    }
     refresh();
   }
 
+  function drawTabs() {
+    var A = state.admin;
+    var tabs = [['sessions', 'Sessions', A ? A.sessions.length : null], ['apprenants', 'Apprenants', A ? (A.learners || []).length : null],
+                ['formateurs', 'Formateurs', A ? A.trainers.length : null]];
+    var bar = clear($('tabs'));
+    tabs.forEach(function (t) {
+      var b = el('button', { type: 'button', role: 'tab', 'aria-selected': String(t[0] === state.tab),
+        onclick: function () { state.tab = t[0]; drawTabs(); render(); window.scrollTo(0, 0); } }, [t[1]]);
+      if (t[2] !== null) b.appendChild(el('span', { cls: 'count', text: String(t[2]) }));
+      bar.appendChild(b);
+    });
+  }
+
   /* Affiche tout de suite les dernieres donnees connues, puis les met a jour en arriere-plan. */
-  var DATA_KEY = 'pfs_espace_data';
   function loadData() { try { var s = JSON.parse(sessionStorage.getItem(DATA_KEY) || 'null'); return s && s.role === state.role ? s.data : null; } catch (e) { return null; } }
   function saveData(d) { try { sessionStorage.setItem(DATA_KEY, JSON.stringify({ role: state.role, data: d })); } catch (e) { /* stockage plein ou bloque */ } }
 
@@ -117,12 +141,12 @@
     var hasData = state.role === 'admin' ? state.admin : state.trainer;
     if (!hasData && cached) { if (state.role === 'admin') state.admin = cached; else state.trainer = cached; }
     if (state.admin || state.trainer) { render(); busy($('refresh'), true); $('refresh').textContent = 'Mise à jour…'; }
-    else { clear(v).appendChild(el('p', { cls: 'soft', text: 'Chargement…' })); }
+    else { clear(v).appendChild(el('p', { cls: 'empty', text: 'Chargement…' })); }
     var action = state.role === 'admin' ? 'adminData' : 'trainerData';
     return api(action).then(function (d) {
-      if (state.role === 'admin') state.admin = d; else state.trainer = d;
+      if (state.role === 'admin') { state.admin = d; drawTabs(); } else state.trainer = d;
       saveData(d);
-      if (!state.relay) render();                  // ne pas couper une relance en cours
+      if (!state.relay && !document.querySelector('dialog[open]')) render();   // ne pas couper une action en cours
     }).catch(function (e) {
       if (state.admin || state.trainer) toast(e.message, true);
       else clear(v).appendChild(el('p', { cls: 'esp-error', text: e.message }));
@@ -132,98 +156,192 @@
   function render() {
     var v = clear($('view'));
     if (state.role === 'admin' && state.admin) {
-      if (state.tab === 'sessions') renderSessions(v); else renderTrainers(v);
+      if (state.tab === 'sessions') renderSessions(v);
+      else if (state.tab === 'apprenants') renderLearners(v);
+      else renderTrainers(v);
     } else if (state.trainer) {
       renderTrainer(v);
     }
   }
 
-  /* ---------- coordination : sessions ---------- */
+  /* ---------- petits elements ---------- */
+  function chip(text, kind) { return el('span', { cls: 'chip' + (kind ? ' ' + kind : ''), text: text }); }
+  function field(label, input) { return el('div', {}, [el('label', { for: input.id, text: label }), input]); }
+  function input(id, value, attrs) { return el('input', Object.assign({ id: id, value: value || '' }, attrs || {})); }
+  function select(id, values, current) {
+    return el('select', { id: id }, values.map(function (x) {
+      var val = Array.isArray(x) ? x[0] : x, txt = Array.isArray(x) ? x[1] : x;
+      return el('option', { value: val, text: txt, selected: val === current });
+    }));
+  }
+  function searchBox(id, value, placeholder, onInput) {
+    var i = el('input', { id: id, type: 'search', value: value, placeholder: placeholder, 'aria-label': placeholder, autocomplete: 'off' });
+    var t = null;
+    i.addEventListener('input', function () { var me = this; clearTimeout(t); t = setTimeout(function () { onInput(me.value); }, 150); });
+    return el('div', { cls: 'search' }, [i]);
+  }
+  function dayTile(s) {
+    if (!s.day) return el('div', { cls: 'day none' }, [el('b', { text: '?' }), el('span', { text: 'date' })]);
+    return el('div', { cls: 'day' + (s.dd < 0 ? ' past' : '') }, [el('b', { text: String(Number(s.day.slice(8, 10))) }),
+      el('span', { text: MOIS[Number(s.day.slice(5, 7)) - 1] })]);
+  }
+
+  /* Fenetre modale. onSave renvoie un message (ou une promesse) ; une erreur s'affiche dans la fenetre. */
+  function modal(title, body, onSave, opts) {
+    opts = opts || {};
+    var err = el('p', { cls: 'esp-error', role: 'alert' });
+    var ok = el('button', { type: 'button', cls: 'btn' + (opts.danger ? ' danger' : ''), text: opts.saveLabel || 'Enregistrer' });
+    var cancel = el('button', { type: 'button', cls: 'btn ghost', text: 'Annuler' });
+    var d = el('dialog', { cls: 'modal', 'aria-label': title }, [el('div', { cls: 'modal-in' },
+      [el('h2', { text: title })].concat(body).concat([err, el('div', { cls: 'row-actions' }, [cancel, ok])]))]);
+    function close() { if (d.open) d.close(); d.remove(); }
+    cancel.addEventListener('click', close);
+    d.addEventListener('cancel', function () { setTimeout(close, 0); });
+    ok.addEventListener('click', function () {
+      err.textContent = ''; busy(ok, true); busy(cancel, true);
+      Promise.resolve().then(onSave).then(function (msg) { close(); if (msg) toast(msg); return refresh(); })
+        .catch(function (e) { err.textContent = e.message; busy(ok, false); busy(cancel, false); });
+    });
+    document.body.appendChild(d);
+    d.showModal();
+    var first = d.querySelector('input:not([readonly]), select, textarea');
+    if (first && !opts.noFocus) first.focus(); else ok.focus();
+  }
+
+  /* ---------- coordination : donnees ---------- */
   function trainerName(code) {
     var t = (state.admin.trainers || []).filter(function (x) { return x.code === code; })[0];
     return t ? t.nom : '';
   }
+  function sessionOf(code) { return state.admin.sessions.filter(function (s) { return s.code === code; })[0]; }
+  function learnersOf(code) { return (state.admin.learners || []).filter(function (l) { return l.code === code; }); }
+  function isActive(s) { return s.statut !== 'Annulée'; }
 
+  function confState(l) {
+    var c = l.conf || '';
+    if (/^Oui/.test(c)) return ['Confirmé', 'ok'];
+    if (/remplac/i.test(c)) return ['Remplacé', 'warn'];
+    if (/^Non/.test(c)) return ['Absent annoncé', 'ko'];
+    return ['Sans réponse', ''];
+  }
+
+  /* ---------- coordination : sessions ---------- */
   function renderSessions(v) {
     var A = state.admin;
-    var filters = [['avenir', 'À venir'], ['sans', 'Sans formateur'], ['passees', 'Passées'], ['toutes', 'Toutes']];
-    var sel = el('select', { id: 'filter', 'aria-label': 'Filtrer les sessions', onchange: function () { state.filter = this.value; render(); } },
-      filters.map(function (f) { return el('option', { value: f[0], text: f[1], selected: f[0] === state.filter }); }));
-    var total = A.sessions.length, sans = A.sessions.filter(function (s) { return !s.formateur && s.statut !== 'Annulée'; }).length;
-    v.appendChild(el('div', { cls: 'esp-tools' }, [
-      sel,
-      el('button', { type: 'button', cls: 'btn small', text: 'Nouvelle session', onclick: function () { sessionForm(null); } }),
-      el('span', { cls: 'soft', text: total + ' sessions, dont ' + sans + ' sans formateur' })
+    var active = A.sessions.filter(isActive);
+    var avenir = active.filter(function (s) { return s.dd === null || s.dd >= 0; });
+    var sans = active.filter(function (s) { return !s.formateur; });
+    var manquants = active.filter(function (s) { return s.dd !== null && s.dd < 0 && s.formateur && !s.rapport; });
+    var inscrits = avenir.reduce(function (n, s) { return n + s.inscrits; }, 0);
+
+    v.appendChild(el('section', { cls: 'stats', 'aria-label': 'Chiffres clés' }, [
+      stat(avenir.length, 'sessions à venir', 'good'),
+      stat(sans.length, 'sans formateur', sans.length ? 'alert' : ''),
+      stat(inscrits, 'apprenants inscrits à venir', ''),
+      stat(manquants.length, 'rapports manquants', manquants.length ? 'alert' : '')
     ]));
-    v.appendChild(el('div', { id: 'panel' }));
 
-    var list = A.sessions.filter(function (s) {
-      if (state.filter === 'avenir') return s.dd === null || s.dd >= 0;
-      if (state.filter === 'passees') return s.dd !== null && s.dd < 0;
-      if (state.filter === 'sans') return !s.formateur && s.statut !== 'Annulée';
-      return true;
-    });
-    if (state.filter === 'passees') list = list.slice().reverse();
-    if (!list.length) { v.appendChild(el('p', { cls: 'empty', text: 'Aucune session.' })); return; }
+    var filters = [['avenir', 'À venir', avenir.length], ['sans', 'Sans formateur', sans.length],
+                   ['passees', 'Passées', active.length - avenir.length], ['toutes', 'Toutes', A.sessions.length]];
+    var pills = el('div', { cls: 'pills', role: 'group', 'aria-label': 'Filtrer les sessions' }, filters.map(function (f) {
+      return el('button', { type: 'button', cls: 'pill', 'aria-pressed': String(f[0] === state.filter),
+        onclick: function () { state.filter = f[0]; render(); } }, [f[1], el('span', { cls: 'n', text: String(f[2]) })]);
+    }));
+    v.appendChild(el('section', { cls: 'toolbar' }, [
+      el('div', { cls: 'toolbar-row' }, [
+        searchBox('q-sess', state.q, 'Chercher une entreprise, une ville, un code ou un formateur', function (val) { state.q = val; drawList(); }),
+        el('button', { type: 'button', cls: 'btn', text: 'Nouvelle session', onclick: function () { sessionForm(null); } })
+      ]),
+      el('div', { cls: 'toolbar-row' }, [pills])
+    ]));
+    var listBox = el('div', { id: 'sess-list' });
+    v.appendChild(listBox);
+    drawList();
 
-    list.forEach(function (s) {
-      var select = el('select', { 'aria-label': 'Formateur de la session ' + s.code },
-        [el('option', { value: '', text: 'Non attribué', selected: !s.formateur })].concat(A.trainers.map(function (t) {
-          return el('option', { value: t.code, text: t.nom + ' (' + t.code + ')', selected: t.code === s.formateur });
-        })));
-      select.addEventListener('change', function () {
-        var val = this.value, prev = s.formateur, me = this;
-        me.disabled = true;
-        api('assign', { code: s.code, trainer: val }).then(function () {
-          s.formateur = val; s.prevenu = false;
-          toast(val ? 'Session attribuée à ' + trainerName(val) + '. Il sera prévenu dans l\'heure.' : 'Formateur retiré.');
-        }).catch(function (e) { me.value = prev; toast(e.message, true); }).then(function () { me.disabled = false; });
+    function drawList() {
+      clear(listBox);
+      var q = norm(state.q);
+      var list = A.sessions.filter(function (s) {
+        if (state.filter === 'avenir') return isActive(s) && (s.dd === null || s.dd >= 0);
+        if (state.filter === 'passees') return isActive(s) && s.dd !== null && s.dd < 0;
+        if (state.filter === 'sans') return isActive(s) && !s.formateur;
+        return true;
+      }).filter(function (s) {
+        return !q || norm([s.entreprise, s.ville, s.pays, s.code, trainerName(s.formateur)].join(' ')).indexOf(q) !== -1;
       });
-      var chips = [
-        chip(s.inscrits + ' inscrits', s.inscrits ? '' : 'warn'),
-        chip(s.confirmes + ' confirmés'),
-        chip('AVANT ' + s.avant + '/' + s.inscrits, s.inscrits && s.avant === s.inscrits ? 'ok' : ''),
-        chip('APRÈS ' + s.apres + '/' + s.inscrits, s.inscrits && s.apres === s.inscrits ? 'ok' : '')
-      ];
-      if (s.dd !== null && s.dd < 0) chips.push(chip(s.rapport ? 'Rapport reçu' : 'Rapport manquant', s.rapport ? 'ok' : 'ko'));
-      if (s.statut === 'Annulée') chips.push(chip('Annulée', 'ko'));
-      if (s.formateur && !s.prevenu && (s.dd === null || s.dd >= 0)) chips.push(chip('Formateur pas encore prévenu', 'warn'));
-      v.appendChild(el('article', { cls: 'card' }, [
-        el('div', { cls: 'sess-head' }, [
-          el('h3', { text: s.entreprise }),
-          el('span', { cls: 'sess-date', text: fr(s.day) + ' · ' + s.creneau + ' · ' + when(s.dd) })
-        ]),
-        el('p', { cls: 'sess-meta', text: [s.ville, s.pays, s.code].filter(Boolean).join(' · ') }),
-        el('div', { cls: 'chips' }, chips),
-        el('div', { cls: 'row-actions' }, [
-          select,
-          el('button', { type: 'button', cls: 'btn ghost small', text: 'Modifier', onclick: function () { sessionForm(s); } }),
-          el('button', { type: 'button', cls: 'btn ghost small', text: 'Ajouter des apprenants', onclick: function () { learnersForm(s); } })
-        ])
+      if (state.filter === 'passees') list = list.slice().reverse();
+      if (!list.length) { listBox.appendChild(el('p', { cls: 'empty', text: 'Aucune session.' })); return; }
+      list.forEach(function (s) { listBox.appendChild(sessionCard(s)); });
+    }
+  }
+
+  function stat(n, label, kind) { return el('div', { cls: 'stat' + (kind ? ' ' + kind : '') }, [el('b', { text: String(n) }), el('span', { text: label })]); }
+
+  function sessionCard(s) {
+    var A = state.admin;
+    var sel = el('select', { id: 'tr-' + s.code },
+      [el('option', { value: '', text: 'Non attribué', selected: !s.formateur })].concat(A.trainers.map(function (t) {
+        return el('option', { value: t.code, text: t.nom + ' (' + t.code + ')', selected: t.code === s.formateur });
+      })));
+    sel.addEventListener('change', function () {
+      var val = this.value, prev = s.formateur, me = this;
+      me.disabled = true;
+      api('assign', { code: s.code, trainer: val }).then(function () {
+        s.formateur = val; s.prevenu = false;
+        toast(val ? 'Session attribuée à ' + trainerName(val) + '. Le formateur sera prévenu dans l\'heure.' : 'Formateur retiré.');
+        refresh();
+      }).catch(function (e) { me.value = prev; toast(e.message, true); }).then(function () { me.disabled = false; });
+    });
+
+    var chips = [
+      chip(plural(s.inscrits, 'inscrit', 'inscrits'), s.inscrits ? '' : 'warn'),
+      chip(plural(s.confirmes, 'confirmé', 'confirmés')),
+      chip('AVANT ' + s.avant + '/' + s.inscrits, s.inscrits && s.avant === s.inscrits ? 'ok' : ''),
+      chip('APRÈS ' + s.apres + '/' + s.inscrits, s.inscrits && s.apres === s.inscrits ? 'ok' : '')
+    ];
+    if (s.dd !== null && s.dd < 0 && isActive(s)) chips.push(chip(s.rapport ? 'Rapport reçu' : 'Rapport manquant', s.rapport ? 'ok' : 'ko'));
+    if (!isActive(s)) chips.push(chip('Annulée', 'ko'));
+    if (s.formateur && !s.prevenu && (s.dd === null || s.dd >= 0) && isActive(s)) chips.push(chip('Formateur pas encore prévenu', 'warn'));
+
+    var open = !!state.open[s.code];
+    var tableBox = el('div', { cls: 'lt-wrap', hidden: !open });
+    var toggle = el('button', { type: 'button', cls: 'btn ghost small toggle', 'aria-expanded': String(open),
+      text: 'Apprenants (' + s.inscrits + ')' });
+    toggle.addEventListener('click', function () {
+      state.open[s.code] = !state.open[s.code];
+      toggle.setAttribute('aria-expanded', String(state.open[s.code]));
+      tableBox.hidden = !state.open[s.code];
+      if (state.open[s.code]) drawTable();
+    });
+    function drawTable() {
+      clear(tableBox);
+      var ls = learnersOf(s.code);
+      if (!ls.length) tableBox.appendChild(el('p', { cls: 'soft', text: 'Aucun apprenant pour le moment.' }));
+      else tableBox.appendChild(learnerTable(ls, false));
+      tableBox.appendChild(el('div', { cls: 'lt-foot' }, [
+        el('button', { type: 'button', cls: 'btn small', text: 'Ajouter des apprenants', onclick: function () { learnersForm(s); } }),
+        ls.length ? el('button', { type: 'button', cls: 'btn ghost small', text: 'Exporter la liste (CSV)', onclick: function () { exportCsv(ls, s.code); } }) : null
       ]));
-    });
-  }
+    }
+    if (open) drawTable();
 
-  function chip(text, kind) { return el('span', { cls: 'chip' + (kind ? ' ' + kind : ''), text: text }); }
-
-  function field(label, input) { return el('div', {}, [el('label', { for: input.id, text: label }), input]); }
-  function input(id, value, attrs) { return el('input', Object.assign({ id: id, value: value || '' }, attrs || {})); }
-  function select(id, values, current) {
-    return el('select', { id: id }, values.map(function (x) { return el('option', { value: x, text: x, selected: x === current }); }));
-  }
-
-  function openPanel(title, body, onSave, saveLabel) {
-    var p = clear($('panel'));
-    var err = el('p', { cls: 'esp-error', role: 'alert' });
-    var save = el('button', { type: 'button', cls: 'btn', text: saveLabel || 'Enregistrer' });
-    save.addEventListener('click', function () {
-      err.textContent = ''; busy(save, true);
-      Promise.resolve().then(onSave).then(function (msg) { clear(p); if (msg) toast(msg); return refresh(); })
-        .catch(function (e) { err.textContent = e.message; }).then(function () { busy(save, false); });
-    });
-    p.appendChild(el('section', { cls: 'card' }, [el('h2', { text: title })].concat(body).concat([
-      el('div', { cls: 'row-actions' }, [save, el('button', { type: 'button', cls: 'btn ghost', text: 'Annuler', onclick: function () { clear(p); } })]), err])));
-    p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return el('article', { cls: 'card' }, [
+      el('div', { cls: 'sess' }, [
+        dayTile(s),
+        el('div', { cls: 'sess-main' }, [
+          el('h3', { text: s.entreprise }),
+          el('p', { cls: 'sess-meta', text: [s.day ? s.creneau + ', ' + when(s.dd) : 'date à fixer', [s.ville, s.pays].filter(Boolean).join(', '), s.code].filter(Boolean).join(' · ') }),
+          el('div', { cls: 'chips' }, chips)
+        ]),
+        el('div', { cls: 'sess-side' }, [el('label', { for: 'tr-' + s.code, text: 'Formateur' }), sel])
+      ]),
+      el('div', { cls: 'sess-foot' }, [
+        toggle,
+        el('button', { type: 'button', cls: 'btn ghost small', text: 'Modifier la session', onclick: function () { sessionForm(s); } }),
+        el('button', { type: 'button', cls: 'btn ghost small', text: 'Ajouter des apprenants', onclick: function () { learnersForm(s); } })
+      ]),
+      tableBox
+    ]);
   }
 
   function sessionForm(s) {
@@ -239,10 +357,12 @@
       creneau: select('s-cren', A.creneaux, s ? s.creneau : A.creneaux[0]),
       statut: select('s-statut', A.statuts, s ? s.statut || A.statuts[0] : A.statuts[0])
     };
-    openPanel(s ? 'Modifier la session ' + s.code : 'Nouvelle session', [el('div', { cls: 'grid2' }, [
-      field('Code session', f.code), field('Entreprise', f.entreprise), field('Pays', f.pays), field('Ville', f.ville),
-      field('Adresse', f.adresse), field('Contact entreprise', f.contact), field('Date', f.date), field('Créneau', f.creneau),
-      field('Statut', f.statut)])],
+    modal(s ? 'Modifier la session' : 'Nouvelle session', [
+      s ? el('p', { cls: 'soft', text: s.entreprise + ' · ' + s.code }) : null,
+      el('div', { cls: 'grid2' }, [
+        field('Code session', f.code), field('Entreprise', f.entreprise), field('Pays', f.pays), field('Ville', f.ville),
+        field('Adresse', f.adresse), field('Contact entreprise', f.contact), field('Date', f.date), field('Créneau', f.creneau),
+        field('Statut', f.statut)])],
       function () {
         var data = {};
         Object.keys(f).forEach(function (k) { data[k] = f[k].value.trim(); });
@@ -262,7 +382,8 @@
     var ta = el('textarea', { id: 'l-list', placeholder: 'Awa Diop ; Commerciale ; +221 77 123 45 67 ; awa@exemple.sn\nMoussa Fall ; Comptable ; 78 222 22 22' });
     var count = el('p', { cls: 'soft', text: '0 apprenant détecté.' });
     ta.addEventListener('input', function () { count.textContent = parseLearners(ta.value).length + ' apprenant(s) détecté(s).'; });
-    openPanel('Ajouter des apprenants : ' + s.entreprise, [
+    modal('Ajouter des apprenants', [
+      el('p', { cls: 'soft', text: s.entreprise + ' · ' + s.code }),
       el('p', { cls: 'soft', text: 'Une ligne par apprenant : Nom ; Fonction ; Téléphone WhatsApp ; E-mail (facultatif). Vous pouvez coller les colonnes depuis Excel.' }),
       field('Liste', ta), count],
       function () {
@@ -273,32 +394,183 @@
         return chunks.reduce(function (p, ch) {
           return p.then(function () { return api('addLearners', { code: s.code, learners: ch }).then(function (r) { added += r.added; skipped = skipped.concat(r.skipped); }); });
         }, Promise.resolve()).then(function () {
-          if (skipped.length) toast(added + ' ajouté(s). Non ajoutés : ' + skipped.join(', '), true);
+          state.open[s.code] = true;
+          if (skipped.length) { setTimeout(function () { toast(added + ' ajouté(s). Non ajoutés : ' + skipped.join(', '), true); }, 50); return ''; }
           return added + ' apprenant(s) ajouté(s).';
         });
-      }, 'Ajouter');
+      }, { saveLabel: 'Ajouter' });
+  }
+
+  /* ---------- coordination : apprenants ---------- */
+  function learnerTable(ls, withSession) {
+    var head = ['Apprenant', 'Téléphone'].concat(withSession ? ['Session'] : []).concat(['Confirmation', 'Questionnaires', '']);
+    var tbody = el('tbody', {}, ls.map(function (l) {
+      var c = confState(l), s = sessionOf(l.code);
+      var cells = [
+        el('td', { cls: 'who' }, [el('b', { text: l.nom }), el('span', { text: [l.fonction, l.email].filter(Boolean).join(' · ') })]),
+        el('td', { cls: 'tel', text: l.tel })
+      ];
+      if (withSession) cells.push(el('td', { cls: 'sess-cell' }, [s ? s.entreprise : l.code, el('span', { text: s ? fr(s.day) + ' · ' + l.code : '' })]));
+      cells.push(el('td', {}, [chip(c[0], c[1]), l.ordinateur ? el('div', { cls: 'soft', text: 'Ordinateur : ' + l.ordinateur }) : null]));
+      cells.push(el('td', {}, [el('div', { cls: 'chips' }, [chip('AVANT', l.avant ? 'ok' : ''), chip('APRÈS', l.apres ? 'ok' : '')])]));
+      cells.push(el('td', { cls: 'acts' }, [
+        el('button', { type: 'button', cls: 'btn link', text: 'Modifier', onclick: function () { learnerEdit(l); } }),
+        el('button', { type: 'button', cls: 'btn link', text: 'Déplacer', onclick: function () { learnerMove(l); } }),
+        el('button', { type: 'button', cls: 'btn link danger-text', text: 'Retirer', onclick: function () { learnerRemove(l); } })
+      ]));
+      return el('tr', {}, cells);
+    }));
+    return el('table', { cls: 'lt' }, [el('thead', {}, [el('tr', {}, head.map(function (h) { return el('th', { text: h }); }))]), tbody]);
+  }
+
+  function renderLearners(v) {
+    var A = state.admin, all = A.learners || [];
+    var sessOpts = [['', 'Toutes les sessions']].concat(A.sessions.map(function (s) {
+      return [s.code, (s.day ? fr(s.day) + ' · ' : '') + s.entreprise + ' (' + learnersOf(s.code).length + ')'];
+    }));
+    var stOpts = [['', 'Tous les statuts'], ['sansconf', 'Sans confirmation'], ['absent', 'Absents annoncés'],
+                  ['avant', 'AVANT manquant'], ['apres', 'APRÈS manquant']];
+    var sSel = select('l-sess', sessOpts, state.lsess), stSel = select('l-stat', stOpts, state.lstat);
+    sSel.setAttribute('aria-label', 'Session'); stSel.setAttribute('aria-label', 'Statut');
+    sSel.addEventListener('change', function () { state.lsess = this.value; drawList(); });
+    stSel.addEventListener('change', function () { state.lstat = this.value; drawList(); });
+    var countEl = el('span', { cls: 'soft' });
+    var exportBtn = el('button', { type: 'button', cls: 'btn ghost', text: 'Exporter (CSV)' });
+    v.appendChild(el('section', { cls: 'toolbar' }, [
+      el('div', { cls: 'toolbar-row' }, [
+        searchBox('q-learn', state.lq, 'Chercher un nom, un téléphone, une fonction ou un e-mail', function (val) { state.lq = val; drawList(); })
+      ]),
+      el('div', { cls: 'toolbar-row' }, [sSel, stSel, el('span', { cls: 'spacer' }), countEl, exportBtn])
+    ]));
+    var box = el('section', { cls: 'card' });
+    v.appendChild(box);
+    var current = [];
+    exportBtn.addEventListener('click', function () { if (current.length) exportCsv(current, state.lsess || 'tous'); else toast('Aucun apprenant à exporter.', true); });
+    drawList();
+
+    function drawList() {
+      var q = norm(state.lq), qd = state.lq.replace(/\D/g, '');
+      current = all.filter(function (l) {
+        if (state.lsess && l.code !== state.lsess) return false;
+        if (state.lstat === 'sansconf' && l.conf) return false;
+        if (state.lstat === 'absent' && !/^Non/.test(l.conf || '')) return false;
+        if (state.lstat === 'avant' && l.avant) return false;
+        if (state.lstat === 'apres' && l.apres) return false;
+        if (!q) return true;
+        if (qd.length >= 4 && String(l.tel).replace(/\D/g, '').indexOf(qd) !== -1) return true;
+        return norm([l.nom, l.fonction, l.email, l.code].join(' ')).indexOf(q) !== -1;
+      });
+      countEl.textContent = plural(current.length, 'apprenant', 'apprenants');
+      clear(box);
+      if (!all.length) { box.appendChild(el('p', { cls: 'empty', text: 'Aucun apprenant. Ajoutez-les depuis l\'onglet Sessions.' })); return; }
+      if (!current.length) { box.appendChild(el('p', { cls: 'empty', text: 'Aucun apprenant ne correspond.' })); return; }
+      var shown = current.slice(0, 300);
+      box.appendChild(learnerTable(shown, !state.lsess));
+      if (current.length > shown.length) box.appendChild(el('p', { cls: 'soft', text: 'Les 300 premiers sont affichés. Affinez la recherche pour voir les autres.' }));
+    }
+  }
+
+  function learnerEdit(l) {
+    var s = sessionOf(l.code);
+    var f = {
+      nom: input('le-nom', l.nom, { maxlength: 100 }),
+      fonction: input('le-fonction', l.fonction, { maxlength: 80 }),
+      tel: input('le-tel', l.tel, { maxlength: 30, inputmode: 'tel' }),
+      email: input('le-email', l.email, { type: 'email', maxlength: 120 })
+    };
+    modal('Modifier un apprenant', [
+      el('p', { cls: 'soft', text: (s ? s.entreprise + ' · ' : '') + l.code }),
+      el('div', { cls: 'grid2' }, [field('Nom complet', f.nom), field('Fonction', f.fonction),
+        field('Téléphone WhatsApp', f.tel), field('E-mail (facultatif)', f.email)]),
+      el('p', { cls: 'note', text: 'Le numéro relie les questionnaires AVANT et APRÈS. Changez-le seulement s\'il est faux.' })],
+      function () {
+        var data = {};
+        Object.keys(f).forEach(function (k) { data[k] = f[k].value.trim(); });
+        return api('saveLearner', { code: l.code, key: l.key, learner: data }).then(function () { return 'Apprenant enregistré.'; });
+      });
+  }
+
+  function learnerMove(l) {
+    var from = sessionOf(l.code);
+    var targets = state.admin.sessions.filter(function (s) { return s.code !== l.code && isActive(s); });
+    if (!targets.length) { toast('Aucune autre session disponible.', true); return; }
+    targets.sort(function (a, b) { return (a.dd !== null && a.dd < 0) - (b.dd !== null && b.dd < 0) || (a.day < b.day ? -1 : 1); });
+    var sel = select('lm-to', targets.map(function (s) {
+      return [s.code, (s.day ? fr(s.day) + ' · ' : '') + s.entreprise + ' · ' + s.code + (s.dd !== null && s.dd < 0 ? ' (passée)' : '')];
+    }), targets[0].code);
+    modal('Déplacer ' + l.nom, [
+      el('p', { cls: 'soft', text: 'Session actuelle : ' + (from ? from.entreprise + ', ' + fr(from.day) : l.code) }),
+      field('Nouvelle session', sel),
+      el('p', { cls: 'note', text: 'Les messages WhatsApp repartent de zéro pour la nouvelle session. Ses questionnaires déjà remplis restent valables.' })],
+      function () {
+        return api('moveLearner', { code: l.code, key: l.key, to: sel.value }).then(function () {
+          var to = sessionOf(sel.value);
+          return l.nom + ' est déplacé vers ' + (to ? to.entreprise : sel.value) + '.';
+        });
+      }, { saveLabel: 'Déplacer' });
+  }
+
+  function learnerRemove(l) {
+    var s = sessionOf(l.code);
+    modal('Retirer ' + l.nom + ' ?', [
+      el('p', { text: 'Cet apprenant sera retiré de la session ' + (s ? s.entreprise + ' du ' + fr(s.day) : l.code) + '. Il ne recevra plus de message.' }),
+      el('p', { cls: 'soft', text: 'Ses réponses aux questionnaires restent dans le classeur.' })],
+      function () {
+        return api('removeLearner', { code: l.code, key: l.key }).then(function () { return l.nom + ' est retiré de la session.'; });
+      }, { saveLabel: 'Retirer', danger: true, noFocus: true });
+  }
+
+  /* Export CSV (separateur ; pour Excel en francais). Les cellules qui commencent par = + - @ sont neutralisees. */
+  function exportCsv(ls, name) {
+    var head = ['Code session', 'Entreprise', 'Date', 'Nom complet', 'Fonction', 'Téléphone WhatsApp', 'E-mail', 'Confirmation', 'Ordinateur', 'AVANT', 'APRÈS'];
+    var rows = ls.map(function (l) {
+      var s = sessionOf(l.code) || {};
+      return [l.code, s.entreprise, fr(s.day), l.nom, l.fonction, l.tel, l.email, l.conf, l.ordinateur, l.avant ? 'Oui' : 'Non', l.apres ? 'Oui' : 'Non'];
+    });
+    var csv = [head].concat(rows).map(function (r) {
+      return r.map(function (x) {
+        var v = String(x === undefined || x === null ? '' : x);
+        if (/^[=+\-@]/.test(v)) v = "'" + v;
+        return '"' + v.replace(/"/g, '""') + '"';
+      }).join(';');
+    }).join('\r\n');
+    var url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    var a = el('a', { href: url, download: 'apprenants-' + String(name).replace(/[^A-Za-z0-9_-]/g, '') + '.csv' });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
   /* ---------- coordination : formateurs ---------- */
   function renderTrainers(v) {
     var A = state.admin;
-    v.appendChild(el('div', { cls: 'esp-tools' }, [
-      el('button', { type: 'button', cls: 'btn small', text: 'Nouveau formateur', onclick: function () { trainerForm(null); } }),
-      el('span', { cls: 'soft', text: A.trainers.length + ' formateurs' })
-    ]));
-    v.appendChild(el('div', { id: 'panel' }));
-    if (!A.trainers.length) { v.appendChild(el('p', { cls: 'empty', text: 'Aucun formateur.' })); return; }
-    A.trainers.forEach(function (t) {
-      var mine = A.sessions.filter(function (s) { return s.formateur === t.code && s.statut !== 'Annulée'; });
-      var next = mine.filter(function (s) { return s.dd !== null && s.dd >= 0; });
-      v.appendChild(el('article', { cls: 'card' }, [
-        el('div', { cls: 'sess-head' }, [el('h3', { text: t.nom }), el('span', { cls: 'soft', text: t.code })]),
-        el('p', { cls: 'sess-meta', text: [t.email, t.tel].filter(Boolean).join(' · ') }),
-        el('div', { cls: 'chips' }, [chip(mine.length + ' sessions'), chip(next.length + ' à venir'),
-          chip(mine.filter(function (s) { return s.dd < 0 && !s.rapport; }).length + ' rapport(s) manquant(s)', mine.some(function (s) { return s.dd < 0 && !s.rapport; }) ? 'ko' : 'ok')]),
-        el('div', { cls: 'row-actions' }, [el('button', { type: 'button', cls: 'btn ghost small', text: 'Modifier', onclick: function () { trainerForm(t); } })])
-      ]));
-    });
+    var box = el('div');
+    v.appendChild(el('section', { cls: 'toolbar' }, [el('div', { cls: 'toolbar-row' }, [
+      searchBox('q-tr', '', 'Chercher un formateur', function (val) { draw(val); }),
+      el('button', { type: 'button', cls: 'btn', text: 'Nouveau formateur', onclick: function () { trainerForm(null); } })
+    ])]));
+    v.appendChild(box);
+    draw('');
+
+    function draw(qv) {
+      clear(box);
+      var q = norm(qv);
+      var list = A.trainers.filter(function (t) { return !q || norm([t.nom, t.code, t.email].join(' ')).indexOf(q) !== -1; });
+      if (!list.length) { box.appendChild(el('p', { cls: 'empty', text: 'Aucun formateur.' })); return; }
+      list.forEach(function (t) {
+        var mine = A.sessions.filter(function (s) { return s.formateur === t.code && isActive(s); });
+        var next = mine.filter(function (s) { return s.dd !== null && s.dd >= 0; });
+        var miss = mine.filter(function (s) { return s.dd !== null && s.dd < 0 && !s.rapport; }).length;
+        var nextS = next[0];
+        box.appendChild(el('article', { cls: 'card' }, [
+          el('div', { cls: 'sess-head' }, [el('h3', { text: t.nom }), el('span', { cls: 'soft', text: t.code })]),
+          el('p', { cls: 'sess-meta', text: [t.email, t.tel].filter(Boolean).join(' · ') }),
+          el('div', { cls: 'chips' }, [chip(plural(mine.length, 'session', 'sessions')), chip(next.length + ' à venir', next.length ? 'info' : ''),
+            chip(miss ? plural(miss, 'rapport manquant', 'rapports manquants') : 'Rapports à jour', miss ? 'ko' : 'ok'),
+            nextS ? chip('Prochaine : ' + nextS.entreprise + ', ' + fr(nextS.day)) : null]),
+          el('div', { cls: 'row-actions' }, [el('button', { type: 'button', cls: 'btn ghost small', text: 'Modifier', onclick: function () { trainerForm(t); } })])
+        ]));
+      });
+    }
   }
 
   function trainerForm(t) {
@@ -307,9 +579,9 @@
       nom: input('t-nom', t && t.nom, { maxlength: 100 }),
       email: input('t-email', t && t.email, { type: 'email', maxlength: 120 }),
       tel: input('t-tel', t && t.tel, { maxlength: 30, inputmode: 'tel' }),
-      pays: select('t-pays', [''].concat(state.admin.pays), '')
+      pays: select('t-pays', [''].concat(state.admin.pays), t ? t.pays || '' : '')
     };
-    openPanel(t ? 'Modifier ' + t.nom : 'Nouveau formateur', [el('div', { cls: 'grid2' }, [
+    modal(t ? 'Modifier ' + t.nom : 'Nouveau formateur', [el('div', { cls: 'grid2' }, [
       field('Code formateur', f.code), field('Nom', f.nom), field('E-mail (sert à la connexion)', f.email),
       field('Téléphone WhatsApp', f.tel), field('Pays', f.pays)])],
       function () {
@@ -333,10 +605,10 @@
       el('p', { cls: 'soft', text: 'Chaque bouton vert ouvre WhatsApp avec le message prêt. Vous appuyez sur Envoyer. Le bouton passe ensuite en vert clair avec la date.' })
     ]);
     if (pending.length) {
-      intro.appendChild(el('button', { type: 'button', cls: 'btn wa', text: 'Relancer les ' + pending.length + ' message(s) du jour, un par un',
+      intro.appendChild(el('button', { type: 'button', cls: 'btn wa', text: 'Envoyer les ' + pending.length + ' message(s) du jour, un par un',
         onclick: function () { state.relay = { list: pending, i: 0 }; renderRelay(); } }));
     } else {
-      intro.appendChild(el('p', { cls: 'chip ok', text: 'Aucun message en attente aujourd\'hui.' }));
+      intro.appendChild(chip('Aucun message en attente aujourd\'hui.', 'ok'));
     }
     v.appendChild(intro);
     v.appendChild(el('div', { id: 'relay' }));
@@ -345,33 +617,32 @@
     T.sessions.forEach(function (s) {
       var conf = s.learners.filter(function (l) { return /^Oui/.test(l.conf || ''); }).length;
       var card = el('article', { cls: 'card' }, [
-        el('div', { cls: 'sess-head' }, [el('h3', { text: s.entreprise }), el('span', { cls: 'sess-date', text: fr(s.day) + ' · ' + s.heure + ' à ' + s.heureFin + ' · ' + when(s.dd) })]),
-        el('p', { cls: 'sess-meta', text: [s.ville, s.pays, s.adresse, s.contact].filter(Boolean).join(' · ') }),
-        el('div', { cls: 'chips' }, [chip(s.learners.length + ' apprenants'), chip(conf + ' confirmés'),
-          chip('AVANT ' + s.learners.filter(function (l) { return l.avant; }).length + '/' + s.learners.length),
-          chip('APRÈS ' + s.learners.filter(function (l) { return l.apres; }).length + '/' + s.learners.length)])
+        el('div', { cls: 'sess' }, [
+          dayTile(s),
+          el('div', { cls: 'sess-main' }, [
+            el('h3', { text: s.entreprise }),
+            el('p', { cls: 'sess-meta', text: [s.heure + ' à ' + s.heureFin + ', ' + when(s.dd), [s.ville, s.pays].filter(Boolean).join(', '), s.adresse, s.contact].filter(Boolean).join(' · ') }),
+            el('div', { cls: 'chips' }, [chip(plural(s.learners.length, 'apprenant', 'apprenants')), chip(plural(conf, 'confirmé', 'confirmés')),
+              chip('AVANT ' + s.learners.filter(function (l) { return l.avant; }).length + '/' + s.learners.length),
+              chip('APRÈS ' + s.learners.filter(function (l) { return l.apres; }).length + '/' + s.learners.length)])
+          ])
+        ])
       ]);
       if (s.rapportLink) {
-        card.appendChild(s.rapport ? chip('Rapport envoyé. Merci.', 'ok')
-          : el('a', { cls: 'btn', href: s.rapportLink, target: '_blank', rel: 'noopener noreferrer', text: 'Remplir mon rapport de session' }));
+        card.appendChild(el('div', { cls: 'row-actions' }, [s.rapport ? chip('Rapport envoyé. Merci.', 'ok')
+          : el('a', { cls: 'btn', href: s.rapportLink, target: '_blank', rel: 'noopener noreferrer', text: 'Remplir mon rapport de session' })]));
       }
       var ul = el('ul', { cls: 'learners' });
       s.learners.forEach(function (l) { ul.appendChild(learnerRow(s, l)); });
-      if (!s.learners.length) ul.appendChild(el('li', { cls: 'empty', text: 'La liste des apprenants arrive bientôt.' }));
+      if (!s.learners.length) ul.appendChild(el('li', { cls: 'soft', text: 'La liste des apprenants arrive bientôt.' }));
       card.appendChild(ul);
       v.appendChild(card);
     });
   }
 
-  function confChip(l) {
-    if (/^Oui/.test(l.conf || '')) return chip('Confirmé', 'ok');
-    if (/remplace/.test(l.conf || '')) return chip('Remplacé', 'warn');
-    if (/^Non/.test(l.conf || '')) return chip('Absent annoncé', 'ko');
-    return chip('Sans réponse');
-  }
-
   function learnerRow(s, l) {
-    var chips = [confChip(l), chip(l.avant ? 'AVANT fait' : 'AVANT à faire', l.avant ? 'ok' : ''), chip(l.apres ? 'APRÈS fait' : 'APRÈS à faire', l.apres ? 'ok' : '')];
+    var c = confState(l);
+    var chips = [chip(c[0], c[1]), chip(l.avant ? 'AVANT fait' : 'AVANT à faire', l.avant ? 'ok' : ''), chip(l.apres ? 'APRÈS fait' : 'APRÈS à faire', l.apres ? 'ok' : '')];
     if (l.ordinateur) chips.push(chip('Ordinateur : ' + l.ordinateur));
     var actions = el('div', { cls: 'row-actions' }, l.actions.map(function (a) { return waButton(s, l, a); }));
     if (!l.actions.length) actions.appendChild(el('span', { cls: 'soft', text: 'Rien à envoyer.' }));
@@ -380,7 +651,7 @@
   }
 
   function waButton(s, l, a) {
-    if (!a.wa) return el('span', { cls: 'chip ko', text: 'Numéro illisible : ' + l.tel });
+    if (!a.wa) return chip('Numéro illisible : ' + l.tel, 'ko');
     var b = el('button', { type: 'button', cls: 'btn small wa' + (a.sentOn ? ' done' : '') + (l.suggested === a.step && !a.sentOn ? ' suggested' : '') });
     b.appendChild(document.createTextNode(a.label));
     var small = el('span', { cls: 'sent', text: a.sentOn ? 'envoyé le ' + fr(a.sentOn) : '' });
